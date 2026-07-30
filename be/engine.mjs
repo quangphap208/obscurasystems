@@ -34,7 +34,7 @@ async function main() {
     onFrame: (frame) => dispatch(normalize(frame)),
     onExpired: async (acc) => {
       await repo.setBloomStatus(acc.id, "expired");
-      for (const id of cfg.adminIds) tg.notify(id, `⚠️ <b>Shard #${acc.id}</b> (${acc.label || "bloom"}) session hết hạn. Cập nhật token rồi restart BE.`);
+      for (const id of cfg.adminIds) tg.notify(id, `⚠️ <b>Shard #${acc.id}</b> (${acc.label || "source"}) session expired. Update the token and restart the engine.`);
     },
   });
   const alive = await pool.startAll(accounts);

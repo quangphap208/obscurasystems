@@ -50,32 +50,32 @@ bot.command("start", async (ctx) => {
 });
 
 async function qaReply(ctx, handle) {
-  await ctx.reply(`🔎 <b>QA: @${esc(handle)}</b>\n\nĐang tra cứu…`, HTML());
+  await ctx.reply(`🔎 <b>QA: @${esc(handle)}</b>\n\nLooking it up…`, HTML());
   const r = await resolveHandle(handle);
-  if (r.found) await ctx.reply(`✅ <b>@${esc(r.handle)}</b> tồn tại trên X (id ${esc(r.xid || "?")}).\nDùng <b>/add ${esc(r.handle)}</b> để theo dõi.`, HTML());
-  else if (r.found === false) await ctx.reply(`❌ Không tìm thấy <b>@${esc(handle)}</b> trên X.`, HTML());
-  else await ctx.reply(`⚠️ Chưa tra cứu được, thử lại sau ít phút.`, HTML());
+  if (r.found) await ctx.reply(`✅ <b>@${esc(r.handle)}</b> exists on X (id ${esc(r.xid || "?")}).\nUse <b>/add ${esc(r.handle)}</b> to track it.`, HTML());
+  else if (r.found === false) await ctx.reply(`❌ <b>@${esc(handle)}</b> not found on X.`, HTML());
+  else await ctx.reply(`⚠️ Couldn't look it up, please try again in a few minutes.`, HTML());
 }
 
 // ---------- /add /remove ----------
 bot.command("add", async (ctx) => {
   const handle = (ctx.match || "").trim().replace(/^@/, "").toLowerCase();
-  if (!handle || !/^\w{1,15}$/.test(handle)) return ctx.reply("Dùng: <b>/add &lt;username&gt;</b>", HTML());
+  if (!handle || !/^\w{1,15}$/.test(handle)) return ctx.reply("Usage: <b>/add &lt;username&gt;</b>", HTML());
   const u = await repo.ensureUser(ctx.from.id, ctx.from.username);
-  if (await repo.getWatch(ctx.from.id, handle)) return ctx.reply(`Đang theo dõi <b>@${esc(handle)}</b> rồi.`, HTML());
+  if (await repo.getWatch(ctx.from.id, handle)) return ctx.reply(`Already watching <b>@${esc(handle)}</b>.`, HTML());
   const n = await repo.countWatches(ctx.from.id);
-  if (n >= (u.account_limit ?? 0)) return ctx.reply(`⚠️ Đã đạt giới hạn <b>${u.account_limit}</b> account của gói <b>${esc(u.tier)}</b>.\nDùng /subscribe để nâng gói.`, HTML());
+  if (n >= (u.account_limit ?? 0)) return ctx.reply(`⚠️ You've reached the <b>${u.account_limit}</b>-account limit of your <b>${esc(u.tier)}</b> plan.\nUse /subscribe to upgrade.`, HTML());
   const r = await resolveHandle(handle);
-  if (r.found === false) return ctx.reply(`❌ Không tìm thấy <b>@${esc(handle)}</b> trên X.`, HTML());
+  if (r.found === false) return ctx.reply(`❌ <b>@${esc(handle)}</b> not found on X.`, HTML());
   await repo.addWatch(ctx.from.id, r.found ? r.handle : handle, r.xid || null);
-  await ctx.reply(`✅ Đã thêm <b>@${esc(r.found ? r.handle : handle)}</b>. Thông báo sẽ tới trong ít phút.\nChỉnh riêng: 👀 X accounts.`, HTML());
+  await ctx.reply(`✅ Added <b>@${esc(r.found ? r.handle : handle)}</b>. Notifications will arrive shortly.\nCustomize it: 👀 X accounts.`, HTML());
 });
 
 bot.command("remove", async (ctx) => {
   const handle = (ctx.match || "").trim().replace(/^@/, "").toLowerCase();
-  if (!handle) return ctx.reply("Dùng: <b>/remove &lt;username&gt;</b>", HTML());
+  if (!handle) return ctx.reply("Usage: <b>/remove &lt;username&gt;</b>", HTML());
   const ok = await repo.removeWatch(ctx.from.id, handle);
-  await ctx.reply(ok ? `✅ Đã bỏ theo dõi <b>@${esc(handle)}</b>.` : `Không thấy <b>@${esc(handle)}</b> trong danh sách.`, HTML());
+  await ctx.reply(ok ? `✅ Unfollowed <b>@${esc(handle)}</b>.` : `<b>@${esc(handle)}</b> is not in your list.`, HTML());
 });
 
 // ---------- /subscribe + thanh toán Telegram Stars ----------
@@ -87,24 +87,24 @@ bot.command("subscribe", async (ctx) => {
 async function sendProInvoice(ctx) {
   const other = cfg.starsProviderToken ? { provider_token: cfg.starsProviderToken } : {};
   await ctx.replyWithInvoice(
-    "Pro Subscription", `Theo dõi tới ${cfg.proLimit} account trong ${cfg.proDays} ngày.`,
+    "Pro Subscription", `Watch up to ${cfg.proLimit} accounts for ${cfg.proDays} days.`,
     "pro", "XTR", [{ label: `Pro ${cfg.proDays}d`, amount: cfg.proPriceStars }], other);
 }
 bot.on("pre_checkout_query", (ctx) => ctx.answerPreCheckoutQuery(true).catch(() => {}));
 bot.on("message:successful_payment", async (ctx) => {
   await repo.setUserPlan(ctx.from.id, { tier: "Pro", accountLimit: cfg.proLimit, expiresAt: Date.now() + cfg.proDays * 86400000 });
   await repo.markReferralSubscribed(ctx.from.id);
-  await ctx.reply(`✅ Thanh toán thành công! Gói <b>Pro</b> ${cfg.proDays} ngày, limit <b>${cfg.proLimit}</b> account.`, HTML());
+  await ctx.reply(`✅ Payment successful! <b>Pro</b> plan for ${cfg.proDays} days, limit <b>${cfg.proLimit}</b> accounts.`, HTML());
 });
 
 // ---------- /grant (admin cấp gói tay để test) ----------
 bot.command("grant", async (ctx) => {
   if (!isAdmin(ctx.from.id)) return;
   const [target, days] = (ctx.match || "").trim().split(/\s+/);
-  const tg = Number(target); if (!tg) return ctx.reply("Dùng: /grant <tg_id> [days]");
+  const tg = Number(target); if (!tg) return ctx.reply("Usage: /grant <tg_id> [days]");
   await repo.ensureUser(tg);
   await repo.setUserPlan(tg, { tier: "Pro", accountLimit: cfg.proLimit, expiresAt: Date.now() + (Number(days) || cfg.proDays) * 86400000 });
-  await ctx.reply(`✅ Cấp Pro cho ${tg} (${Number(days) || cfg.proDays} ngày).`);
+  await ctx.reply(`✅ Granted Pro to ${tg} (${Number(days) || cfg.proDays} days).`);
 });
 
 // ---------- callback router ----------
@@ -130,7 +130,7 @@ bot.on("callback_query:data", async (ctx) => {
       const h = data.slice(3);
       await repo.removeWatch(uid, h);
       await show(ctx, accountsScreen(await repo.listWatches(uid)), true);
-      return ctx.answerCallbackQuery(`Đã bỏ @${h}`);
+      return ctx.answerCallbackQuery(`Removed @${h}`);
     }
     if (data.startsWith("tg:")) return toggle(ctx, byKey[data.slice(3)], { type: "g" });
     if (data.startsWith("tw:")) {
@@ -141,7 +141,7 @@ bot.on("callback_query:data", async (ctx) => {
     return ctx.answerCallbackQuery();
   } catch (e) {
     console.warn("[cb]", data, e.message);
-    return ctx.answerCallbackQuery({ text: "Có lỗi, thử lại.", show_alert: false }).catch(() => {});
+    return ctx.answerCallbackQuery({ text: "Something went wrong, try again.", show_alert: false }).catch(() => {});
   }
 });
 
@@ -168,12 +168,18 @@ bot.catch((err) => console.error("[bot error]", err.error?.message || err.messag
 const me = await bot.api.getMe();
 BOT_USER = me.username;
 await bot.api.setMyCommands([
-  { command: "start", description: "Mở menu chính" },
-  { command: "add", description: "Theo dõi 1 tài khoản X" },
-  { command: "remove", description: "Bỏ theo dõi" },
-  { command: "subscribe", description: "Nâng gói Pro" },
+  { command: "start", description: "main menu" },
+  { command: "add", description: "/add username or link | track a new X account" },
+  { command: "remove", description: "/remove username | stop tracking an account" },
+  { command: "accounts", description: "view tracked accounts" },
+  { command: "settings", description: "notification settings per account" },
+  { command: "bulkremove", description: "remove several accounts at once" },
+  { command: "mute", description: "/mute username | pause alerts without untracking" },
+  { command: "ca", description: "/ca username | contract addresses found in tweets and images" },
+  { command: "subscribe", description: "upgrade your plan" },
+  { command: "support", description: "contact support" },
 ]);
-console.log(`FE bot @${BOT_USER} đang chạy.`);
+console.log(`FE bot @${BOT_USER} running.`);
 
 process.once("SIGINT", async () => { await bot.stop(); await close(); process.exit(0); });
 process.once("SIGTERM", async () => { await bot.stop(); await close(); process.exit(0); });

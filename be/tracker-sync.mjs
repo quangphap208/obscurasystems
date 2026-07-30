@@ -25,7 +25,7 @@ export class TrackerSync {
     console.warn("[tracker-sync]", msg);
     if (Date.now() - this.lastAlert < 60000) return;
     this.lastAlert = Date.now();
-    for (const id of this.adminIds) this.tg.notify(id, `⚠️ <b>Pool Bloom</b>: ${msg}`);
+    for (const id of this.adminIds) this.tg.notify(id, `⚠️ <b>Source pool</b>: ${msg}`);
   }
 
   // Shard còn nhiều chỗ nhất (đang sống). load tính từ map cục bộ để không lệch trong 1 lượt.
@@ -69,12 +69,12 @@ export class TrackerSync {
       const trackedSet = new Set((await repo.allTracked()).map((t) => t.handle));
       for (const h of desired) if (!trackedSet.has(h) || needAssign.has(h)) needAssign.add(h);
 
-      if (!activeIds.size) { if (desired.size) this.alert("không có shard nào sống — cần cập nhật session Bloom."); return; }
+      if (!activeIds.size) { if (desired.size) this.alert("no live shard — a source session needs updating."); return; }
 
       // 3) gán + track
       for (const h of needAssign) {
         const shard = this.pickShard(accounts, activeIds, load);
-        if (!shard) { this.alert(`pool đầy — handle @${h} chưa track được. Thêm tài khoản Bloom hoặc tăng capacity.`); continue; }
+        if (!shard) { this.alert(`pool full — @${h} could not be tracked. Add a source account or raise capacity.`); continue; }
         let xid = await repo.xidForHandle(h);
         try {
           const key = await this.keyFor(shard.session_token);

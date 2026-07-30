@@ -83,18 +83,18 @@ export function globalSettingsScreen(values) {
   return { text: SETTINGS_TEXT, keyboard: settingsKeyboard(values, { type: "g" }) };
 }
 export function accountSettingsScreen(handle, values) {
-  const text = `⚙️ Settings for <b>@${esc(handle)}</b>\n\n<i>Override preset cho riêng account này.</i>\n\n❌ = <b>Disabled</b> | Tap to toggle.`;
+  const text = `⚙️ Settings for <b>@${esc(handle)}</b>\n\n<i>Override the preset for this account only.</i>\n\n❌ = <b>Disabled</b> | Tap to toggle.`;
   return { text, keyboard: settingsKeyboard(values, { type: "w", handle }) };
 }
 
 // 👀 X accounts — danh sách
 export function accountsScreen(watches) {
   if (!watches.length) {
-    return { text: "You are not watching any accounts yet.\n\nDùng <b>/add &lt;username&gt;</b> để thêm.", keyboard: new InlineKeyboard().text("⬅️ Back", "home").text("ⓧ Close", "close") };
+    return { text: "You are not watching any accounts yet.\n\nUse <b>/add &lt;username&gt;</b> to add one.", keyboard: new InlineKeyboard().text("⬅️ Back", "home").text("ⓧ Close", "close") };
   }
   const text = `👀 <b>Accounts You Watch</b> (${watches.length})\n\n` +
     watches.map((w) => `• <b>@${esc(w.handle)}</b>`).join("\n") +
-    `\n\n<i>Bấm ⚙️ để chỉnh riêng, 🗑 để bỏ theo dõi.</i>`;
+    `\n\n<i>Tap ⚙️ to customize, 🗑 to unfollow.</i>`;
   const kb = new InlineKeyboard();
   for (const w of watches) {
     kb.text(`⚙️ ${w.handle}`, `acct:${w.handle}`).text(`🗑`, `rm:${w.handle}`).row();
@@ -107,12 +107,12 @@ export function accountsScreen(watches) {
 export function subscribeScreen(user, price, days, limit) {
   const text =
     `💎 <b>Subscribe</b>\n\n` +
-    `<b>Free</b> — theo dõi tối đa vài account, tính năng cơ bản.\n\n` +
-    `<b>Pro</b> — <b>${price}</b> ⭐ / ${days} ngày\n` +
-    `• Theo dõi tới <b>${limit}</b> account\n` +
-    `• Mở khoá tất cả loại thông báo\n\n` +
-    `Trạng thái hiện tại: <b>${esc(user?.tier || "Free")}</b> · Exp: <b>${fmtExp(user)}</b>`;
-  const keyboard = new InlineKeyboard().text(`⭐ Mua Pro (${price})`, "buy:pro").row().text("⬅️ Back", "home").text("ⓧ Close", "close");
+    `<b>Free</b> — watch a few accounts, basic features.\n\n` +
+    `<b>Pro</b> — <b>${price}</b> ⭐ / ${days} days\n` +
+    `• Watch up to <b>${limit}</b> accounts\n` +
+    `• Unlock every notification type\n\n` +
+    `Current status: <b>${esc(user?.tier || "Free")}</b> · Exp: <b>${fmtExp(user)}</b>`;
+  const keyboard = new InlineKeyboard().text(`⭐ Buy Pro (${price})`, "buy:pro").row().text("⬅️ Back", "home").text("ⓧ Close", "close");
   return { text, keyboard };
 }
 
