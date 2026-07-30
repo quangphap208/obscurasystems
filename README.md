@@ -36,10 +36,13 @@ photos/videos, follows/unfollows, profileChanges/affiliations, deletedTweets, su
 
 ```bash
 npm install
+npx playwright install chromium   # tải Chromium khớp version (BE cần browser thật)
 cp .env.example .env          # điền BOT_TOKEN, MONGODB_URI, BLOOM_SESSIONS, ADMIN_IDS
 npm run migrate               # tạo collection + index (gồm TTL)
 npm run seed                  # nạp pool Bloom từ BLOOM_SESSIONS (+ user test nếu set SEED_USER)
 ```
+
+> `.env` cho phép comment `# ...` sau giá trị (parser tự cắt). Không cần xoá comment ở `.env.example`.
 
 ## Chạy
 

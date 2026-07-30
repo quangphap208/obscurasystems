@@ -10,8 +10,13 @@ function loadEnv() {
   let raw = "";
   try { raw = readFileSync(join(ROOT, ".env"), "utf8"); } catch { return; }
   for (const line of raw.split("\n")) {
-    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
-    if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/);
+    if (!m || m[1] in process.env) continue;
+    let v = m[2];
+    // cắt inline comment " #..." (chỉ khi giá trị KHÔNG bọc trong dấu nháy)
+    if (!/^\s*["']/.test(v)) v = v.replace(/\s+#.*$/, "");
+    v = v.trim().replace(/^["']|["']$/g, "");
+    process.env[m[1]] = v;
   }
 }
 loadEnv();
