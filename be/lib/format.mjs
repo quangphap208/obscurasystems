@@ -3,6 +3,7 @@
 // media/preview đặt qua link_preview_options.url; dùng HTML parse_mode (Telegram tự tính offset).
 
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const reEsc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const FX = "https://fxtwitter.com", DFX = "https://d.fxtwitter.com";
 
 // [action emoji, verb, separator]
@@ -150,7 +151,9 @@ export function buildMessage(e, { botUser, botLabel = "🕶️ Obscura" } = {}) 
     text = head + sep + (e.profileCard ? `<blockquote>${esc(e.profileCard)}</blockquote>` : "");
   } else {
     let body = e.content || "";
-    if (k === "reply") body = body.replace(/^(?:@\w+\s+)+/, "");   // cắt @mention lặp ở đầu body reply
+    // Chỉ cắt ĐÚNG mention của người được reply (không cắt mọi mention đầu body) — relay_bugs Lỗi 2.
+    // vd reply @ggreenwald vẫn giữ "@AGHamilton29 …" do tác giả tự gõ.
+    if (k === "reply" && target) body = body.replace(new RegExp("^@" + reEsc(target) + "\\s+", "i"), "");
     // profileChanges body đã chứa HTML (bold field) -> không esc lại
     text = head + sep + (k === "profileChanges" ? body : esc(body));
   }
