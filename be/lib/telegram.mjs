@@ -5,12 +5,13 @@ const API = (token, m) => `https://api.telegram.org/bot${token}/${m}`;
 export class Telegram {
   constructor(token) { this.token = token; this.queues = new Map(); }
 
-  // enqueue theo từng chatId (tuần tự, ~1.1s/tin để né rate-limit per-chat)
-  send(chatId, payload) {
+  // enqueue theo từng chatId (tuần tự, ~1.1s/tin để né rate-limit per-chat).
+  // priority=true -> chen lên đầu hàng (vd delete: không đợi sau đống tweet đang xếp hàng).
+  send(chatId, payload, { priority = false } = {}) {
     if (!chatId) return;
     if (!this.queues.has(chatId)) this.queues.set(chatId, { q: [], draining: false });
     const st = this.queues.get(chatId);
-    st.q.push(payload);
+    if (priority) st.q.unshift(payload); else st.q.push(payload);
     this._drain(chatId);
   }
 

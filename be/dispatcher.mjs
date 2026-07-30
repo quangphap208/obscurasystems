@@ -54,7 +54,7 @@ export function makeDispatcher({ tg, getBotUser, warmupUntil = 0 }) {
         const ev = applyMediaFilter(e, settings);
         const msg = buildMessage(ev, { botUser });
         if (!msg) continue;
-        tg.send(tgId, msg);
+        tg.send(tgId, msg, { priority: e.kind === "deleted" });   // delete chen lên đầu hàng đợi
         sent++;
       }
       if (sent) console.log(`[dispatch] ${e.kind} @${handle} -> ${sent} user`);
