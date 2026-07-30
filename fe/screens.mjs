@@ -3,7 +3,7 @@
 import { InlineKeyboard } from "grammy";
 import { SETTINGS, OCR, byKey, label } from "../shared/settings.mjs";
 
-const BOT_NAME = "KOL Tracker";
+const BOT_NAME = "Obscura Systems";
 
 const fmtExp = (u) => {
   if (!u?.expires_at || u.expires_at < Date.now()) return "EXPIRED";

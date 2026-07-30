@@ -1,6 +1,6 @@
-# redacted-clone — Telegram KOL tracker (clone @redactedsystemsbot)
+# Obscura Systems — Telegram KOL tracker
 
-Bot Telegram theo dõi hoạt động tài khoản X, chia làm **2 phần độc lập**, giao tiếp qua **MongoDB Atlas**:
+Bot Telegram theo dõi hoạt động tài khoản X (mô phỏng `@redactedsystemsbot`), chia làm **2 phần độc lập**, giao tiếp qua **MongoDB Atlas**:
 
 | Phần | Vai trò | Entry |
 |---|---|---|

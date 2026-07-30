@@ -122,7 +122,7 @@ function profileCard(u) {
 }
 
 // Dựng { text(HTML), link_preview_options, reply_markup } cho Bot API.
-export function buildMessage(e, { botUser, botLabel = "🤖 Bot" } = {}) {
+export function buildMessage(e, { botUser, botLabel = "🕶️ Obscura" } = {}) {
   const k = e.kind;
   const meta = ACT[k]; if (!meta) return null;
   const [emoji, verb, sep] = meta;

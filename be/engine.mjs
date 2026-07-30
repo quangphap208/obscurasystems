@@ -20,7 +20,7 @@ async function main() {
   await connect();
   const me = await tg.getMe();
   botUser = me?.username || null;
-  console.log("KOL Engine | bot:", botUser ? "@" + botUser : "(no buttons)", "| warmup", cfg.warmupMs / 1000 + "s");
+  console.log("Obscura Engine | bot:", botUser ? "@" + botUser : "(no buttons)", "| warmup", cfg.warmupMs / 1000 + "s");
 
   const accounts = await repo.listBloomAccounts(true);
   if (!accounts.length) {
