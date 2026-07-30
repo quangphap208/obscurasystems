@@ -30,6 +30,12 @@ const mediaOf = (m = {}) => ({
   videos: (m.videos || []).filter(Boolean),
 });
 
+// Lấy handle từ object user (shape Bloom/X không nhất quán: handle | screen_name | username).
+const uHandle = (u) => {
+  const h = u && (u.handle || u.screen_name || u.username);
+  return h ? String(h).replace(/^@/, "") : null;
+};
+
 // Chuẩn hoá 1 frame ({type,data}) -> event thống nhất, hoặc null nếu bỏ qua.
 export function normalize(frame) {
   if (!frame || typeof frame !== "object") return null;
@@ -58,28 +64,34 @@ export function normalize(frame) {
   }
 
   // ---- activity: follow / unfollow / profile changes ----
+  // Envelope thật (reverse từ ws.js): { type:"activity", data:{ event, activity:{ user_id, change:{before,after}, ... } } }
+  // actor KHÔNG có screen_name trong frame -> resolve theo user_id ở dispatcher (tracked_handles).
   if (t === "activity") {
-    const a = d.actor || d.author || {};
-    const sub = d.type || d.event_type || "";
-    if (sub === "follow.follow" || sub === "follow.unfollow") {
-      const tgt = d.target || d.followed || {};
+    const ev = d.event || d.type || "";
+    const act = d.activity || {};
+    const actorId = act.user_id != null ? String(act.user_id) : (d.author?.id != null ? String(d.author.id) : null);
+    const before = act.change?.before, after = act.change?.after;
+
+    if (ev === "follow.follow" || ev === "follow.unfollow") {
+      const t2 = ev === "follow.follow" ? after : before;         // followed=after, unfollowed=before
+      const tgt = (t2 && typeof t2 === "object") ? t2 : {};
       return {
-        kind: sub === "follow.follow" ? "followed" : "unfollowed",
-        authorId: a.id ? String(a.id) : null, actor: a.screen_name || null, actorName: a.name || "",
-        target: tgt.screen_name || null, targetUser: tgt, content: "",
+        kind: ev === "follow.follow" ? "followed" : "unfollowed",
+        authorId: actorId, actor: null,
+        target: uHandle(tgt), targetUser: tgt, content: "",
         profileCard: profileCard(tgt), images: [], hasVideo: false,
       };
     }
-    if (sub.startsWith("profile.update.")) {
-      const field = sub.slice("profile.update.".length);
+    if (ev.startsWith("profile.update.")) {
+      const field = ev.slice("profile.update.".length);
       if (field === "affiliate_badge")
-        return { kind: "affiliation", authorId: a.id ? String(a.id) : null, actor: a.screen_name || null, content: d.new_value || d.value || "", images: [], hasVideo: false };
+        return { kind: "affiliation", authorId: actorId, actor: null, content: typeof after === "string" ? after : "", images: [], hasVideo: false };
       const img = field === "profile_picture" || field === "banner_picture";
       return {
-        kind: "profileChanges", field, authorId: a.id ? String(a.id) : null, actor: a.screen_name || null,
-        oldValue: d.old_value ?? null, newValue: d.new_value ?? d.value ?? null,
-        content: buildProfileBody(field, d.old_value, d.new_value ?? d.value),
-        images: img && d.new_value ? [d.new_value] : [], hasVideo: false,
+        kind: "profileChanges", field, authorId: actorId, actor: null,
+        oldValue: before ?? null, newValue: after ?? null,
+        content: buildProfileBody(field, before, after),
+        images: img && typeof after === "string" ? [after] : [], hasVideo: false,
       };
     }
     return null;
@@ -110,11 +122,14 @@ function buildProfileBody(field, oldV, newV) {
 
 // Profile card (blockquote) cho follow — theo send_like_source.md §6.
 function profileCard(u) {
-  if (!u || !u.screen_name) return "";
-  const fol = u.friends_count ?? u.following_count ?? "?";
-  const fers = u.followers_count ?? "?";
-  const parts = [` ${u.name || u.screen_name} (${u.screen_name})`, `${fol} Following | ${fers} Followers`];
-  if (u.description) parts.push("", u.description);
+  const handle = uHandle(u);
+  if (!handle) return "";
+  const pm = u.public_metrics || {};
+  const fol = u.friends_count ?? u.following_count ?? pm.following_count ?? "?";
+  const fers = u.followers_count ?? pm.followers_count ?? "?";
+  const bio = u.description ?? u.bio;
+  const parts = [` ${u.name || handle} (${handle})`, `${fol} Following | ${fers} Followers`];
+  if (bio) parts.push("", bio);
   const tail = [];
   if (u.location !== undefined) tail.push(`📍 ${u.location ?? "null"}`);
   if (u.url) tail.push(`🔗 ${u.url}`);

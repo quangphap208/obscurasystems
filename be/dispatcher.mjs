@@ -38,6 +38,7 @@ export function makeDispatcher({ tg, getBotUser, warmupUntil = 0 }) {
 
       const handle = await resolveHandle(e);
       if (!handle) return;
+      if (!e.actor) e.actor = handle;                  // follow/profile: actor không có trong frame
       await repo.touchTracked(handle);
       if (Date.now() < warmupUntil) return;            // nuốt backlog lúc mới connect
 
