@@ -130,6 +130,7 @@ bot.on("callback_query:data", async (ctx) => {
   try {
     if (data === "none") return ctx.answerCallbackQuery();
     if (data === "close") { await ctx.deleteMessage().catch(() => {}); return ctx.answerCallbackQuery(); }
+    if (data === "del") { await ctx.deleteMessage().catch(() => {}); return ctx.answerCallbackQuery("Deleted"); }  // xoá tin noti
     if (data === "home") { await welcome(ctx, true); return ctx.answerCallbackQuery(); }
     if (data === "viewAccounts") { await show(ctx, accountsScreen(await repo.listWatches(uid)), true); return ctx.answerCallbackQuery("Viewing accounts"); }
     if (data === "referrals") { await show(ctx, referralScreen(BOT_USER, uid, await repo.referralStats(uid)), true); return ctx.answerCallbackQuery("Viewing Referrals..."); }

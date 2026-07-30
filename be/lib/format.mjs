@@ -123,7 +123,7 @@ function profileCard(u) {
 }
 
 // Dựng { text(HTML), link_preview_options, reply_markup } cho Bot API.
-export function buildMessage(e, { botUser, botLabel = "🕶️ Obscura" } = {}) {
+export function buildMessage(e, { botUser } = {}) {
   const k = e.kind;
   const meta = ACT[k]; if (!meta) return null;
   const [emoji, verb, sep] = meta;
@@ -169,20 +169,20 @@ export function buildMessage(e, { botUser, botLabel = "🕶️ Obscura" } = {}) 
   else if (parentLink && REPLYLIKE.has(k)) lpo = { url: parentLink, show_above_text: false, prefer_large_media: true };
   else lpo = { is_disabled: true };
 
-  // nút inline
+  // nút inline. Noti gửi DM sẵn nên không cần nút mở-bot; thay bằng 🗑 Delete để user
+  // xoá chính tin noti này (callback "del" -> FE deleteMessage).
   const rows = [];
-  const brand = botUser ? { text: botLabel, url: `https://t.me/${botUser}` } : null;
+  const del = { text: "🗑 Delete", callback_data: "del" };
   if (k === "followed" || k === "unfollowed") {
-    if (brand) rows.push([brand]);
+    rows.push([del]);
     if (target) rows.push([{ text: "View Followed Account", url: `https://x.com/${target}/` }]);
     if (target && botUser) rows.push([{ text: `QA: ${target}`, url: `https://t.me/${botUser}?start=qa+${target}` }]);
   } else {
-    const row = [];
-    if (brand) row.push(brand);
+    const row = [del];
     if (e.tweetId && author) row.push({ text: "View Tweet", url: `https://x.com/${author}/status/${e.tweetId}` });
-    if (row.length) rows.push(row);
+    rows.push(row);
   }
-  return { text, link_preview_options: lpo, reply_markup: rows.length ? { inline_keyboard: rows } : undefined };
+  return { text, link_preview_options: lpo, reply_markup: { inline_keyboard: rows } };
 }
 
 export { ACT, esc };
