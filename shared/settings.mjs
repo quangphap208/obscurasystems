@@ -18,18 +18,18 @@ export const SETTINGS = [
   { key: "replies",          col: "replies",           group: "new", def: 1, gate: null },
   { key: "follows",          col: "follows",           group: "new", def: 0, gate: null },
   { key: "profileChanges",   col: "profile_changes",   group: "new", def: 1, gate: null },
-  { key: "muted",            col: "muted",             group: "new", def: 0, gate: "coming" },
-  { key: "spaces",           col: "spaces",            group: "new", def: 0, gate: "paid" },
+  { key: "muted",            col: "muted",             group: "new", def: 0, gate: "coming", hidden: true },   // Bloom chỉ mute cục bộ
+  { key: "spaces",           col: "spaces",            group: "new", def: 0, gate: "paid",   hidden: true },   // Bloom không có Spaces
   { key: "deletedTweets",    col: "deleted_tweets",    group: "new", def: 0, gate: null },
   { key: "photos",           col: "photos",            group: "new", def: 1, gate: null },
   { key: "videos",           col: "videos",            group: "new", def: 0, gate: null },
   { key: "unfollows",        col: "unfollows",         group: "new", def: 0, gate: null },
-  { key: "pins",             col: "pins",              group: "new", def: 0, gate: "coming" },
-  { key: "unpins",           col: "unpins",            group: "new", def: 0, gate: "coming" },
+  { key: "pins",             col: "pins",              group: "new", def: 0, gate: "coming", hidden: true },   // Bloom không phát event pin
+  { key: "unpins",           col: "unpins",            group: "new", def: 0, gate: "coming", hidden: true },
   { key: "affiliations",     col: "affiliations",      group: "new", def: 0, gate: null },
   // ---- Custom Notifications (4) — hậu tố callback _cn ----
-  { key: "trendingTweets",   col: "trending_tweets",   group: "cn",  def: 0, gate: "coming" },
-  { key: "trendingProfiles", col: "trending_profiles", group: "cn",  def: 0, gate: "coming" },
+  { key: "trendingTweets",   col: "trending_tweets",   group: "cn",  def: 0, gate: "coming", hidden: true },  // cần hạ tầng riêng
+  { key: "trendingProfiles", col: "trending_profiles", group: "cn",  def: 0, gate: "coming", hidden: true },
   { key: "suspensions",      col: "suspensions",       group: "cn",  def: 1, gate: null },
   { key: "deactivations",    col: "deactivations",     group: "cn",  def: 1, gate: null },
 ];

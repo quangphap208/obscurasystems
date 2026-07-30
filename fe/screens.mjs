@@ -61,14 +61,14 @@ function settingsKeyboard(values, scope) {
 
   btn(kb, OCR).row();                                   // OCR
   kb.text("---- New Accounts ----", "none").row();
-  const newAcc = SETTINGS.filter((s) => s.group === "new");
+  const newAcc = SETTINGS.filter((s) => s.group === "new" && !s.hidden);
   for (let i = 0; i < newAcc.length; i += 2) {
     btn(kb, newAcc[i]);
     if (newAcc[i + 1]) btn(kb, newAcc[i + 1]);
     kb.row();
   }
   kb.text("---- Custom Notifications ----", "none").row();
-  const cn = SETTINGS.filter((s) => s.group === "cn");
+  const cn = SETTINGS.filter((s) => s.group === "cn" && !s.hidden);
   for (let i = 0; i < cn.length; i += 2) {
     btn(kb, cn[i]);
     if (cn[i + 1]) btn(kb, cn[i + 1]);
