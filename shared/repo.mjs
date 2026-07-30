@@ -24,7 +24,11 @@ export async function ensureUser(tgId, username, referredBy = null) {
   tgId = Number(tgId);
   const existing = await getUser(tgId);
   if (existing) {
-    if (username && username !== existing.username) await col("users").updateOne({ _id: tgId }, { $set: { username } });
+    const set = {};
+    if (username && username !== existing.username) set.username = username;
+    // Free-tier: account_limit bám cfg.freeLimit hiện tại (Pro giữ limit cố định lúc nâng gói).
+    if (existing.tier === "Free" && existing.account_limit !== cfg.freeLimit) set.account_limit = cfg.freeLimit;
+    if (Object.keys(set).length) await col("users").updateOne({ _id: tgId }, { $set: set });
     return getUser(tgId);
   }
   const ref = referredBy && Number(referredBy) !== tgId ? Number(referredBy) : null;
