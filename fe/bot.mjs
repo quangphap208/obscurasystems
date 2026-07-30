@@ -54,7 +54,7 @@ async function qaReply(ctx, handle) {
   const r = await resolveHandle(handle);
   if (r.found) await ctx.reply(`✅ <b>@${esc(r.handle)}</b> tồn tại trên X (id ${esc(r.xid || "?")}).\nDùng <b>/add ${esc(r.handle)}</b> để theo dõi.`, HTML());
   else if (r.found === false) await ctx.reply(`❌ Không tìm thấy <b>@${esc(handle)}</b> trên X.`, HTML());
-  else await ctx.reply(`⚠️ Chưa validate được (pool Bloom chưa sẵn sàng).`, HTML());
+  else await ctx.reply(`⚠️ Chưa tra cứu được, thử lại sau ít phút.`, HTML());
 }
 
 // ---------- /add /remove ----------
