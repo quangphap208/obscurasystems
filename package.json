@@ -1,0 +1,22 @@
+{
+  "name": "redacted-clone",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Telegram KOL-tracking bot (clone of @redactedsystemsbot). FE = Telegram bot, BE = Bloom-powered X event engine. Standalone project.",
+  "scripts": {
+    "migrate": "node shared/migrate.mjs",
+    "be": "node be/engine.mjs",
+    "fe": "node fe/bot.mjs",
+    "seed": "node scripts/seed.mjs",
+    "verify": "node scripts/verify_format.mjs"
+  },
+  "dependencies": {
+    "grammy": "^1.30.0",
+    "mongodb": "^6.21.0",
+    "playwright": "^1.56.0"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^11.2.0"
+  }
+}
