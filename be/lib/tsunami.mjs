@@ -73,9 +73,9 @@ export async function trackNames(session, key, names) {
   const res = await tsunamiRequest(session, key, "POST", "/api/twitter/track", { twitter_names: names });
   return { added: res.added ?? [], notFound: res.notFound ?? res.not_found ?? [] };
 }
-// Bỏ theo dõi. Bloom nhận theo id hoặc handle tuỳ endpoint — thử id trước.
-export async function untrackNames(session, key, names) {
-  return tsunamiRequest(session, key, "POST", "/api/twitter/untrack", { twitter_names: names });
+// Bỏ theo dõi: DELETE /api/twitter/track với twitter_ids (KHÔNG phải names). (reverse từ session.js)
+export async function untrackIds(session, key, ids) {
+  return tsunamiRequest(session, key, "DELETE", "/api/twitter/track", { twitter_ids: ids.map(String) });
 }
 // Danh sách account đang tracked của session này (để đo cap thực).
 export async function fetchState(session, key) {

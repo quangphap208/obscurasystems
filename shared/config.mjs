@@ -33,6 +33,9 @@ export const cfg = {
   bloomSessions: (process.env.BLOOM_SESSIONS || "")
     .split(",").map((s) => s.trim()).filter(Boolean),
   bloomCapacity: Number(process.env.BLOOM_CAPACITY || 200),
+  // exclusive: reconciler untrack MỌI account không nằm trong watches (giữ tài khoản Bloom sạch).
+  // CHỈ bật khi tài khoản Bloom DÙNG RIÊNG cho Obscura — bật nhầm trên account chung sẽ xoá hết list bên kia.
+  sourceExclusive: process.env.SOURCE_EXCLUSIVE === "1",
   // thanh toán: Telegram Stars (XTR). providerToken rỗng = Stars; hoặc token nhà cung cấp khác.
   starsProviderToken: process.env.STARS_PROVIDER_TOKEN || "",
   // giá / gói (có thể override qua env)

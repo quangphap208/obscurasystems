@@ -2,7 +2,8 @@
 // Gán mỗi handle vào 1 shard còn chỗ; untrack handle không còn ai watch; re-home handle
 // của shard chết sang shard sống; cảnh báo admin khi pool đầy hoặc shard hết hạn.
 import * as repo from "../shared/repo.mjs";
-import { handshake, searchUsers, trackNames, untrackNames } from "./lib/tsunami.mjs";
+import { handshake, searchUsers, trackNames, untrackIds, fetchState } from "./lib/tsunami.mjs";
+import { cfg } from "../shared/config.mjs";
 
 const KEY_TTL = 10 * 60 * 1000;
 
@@ -54,7 +55,7 @@ export class TrackerSync {
       for (const t of await repo.allTracked()) {
         const ref = await repo.refCount(t.handle);
         if (ref === 0 || !desired.has(t.handle)) {
-          await this.untrack(accById.get(t.bloom_account_id), t.handle).catch(() => {});
+          await this.untrack(accById.get(t.bloom_account_id), t.x_user_id, t.handle).catch(() => {});
           await repo.deleteTracked(t.handle);
           if (t.bloom_account_id != null) load.set(t.bloom_account_id, Math.max(0, (load.get(t.bloom_account_id) || 1) - 1));
           continue;
@@ -87,14 +88,29 @@ export class TrackerSync {
           console.warn(`[tracker-sync] track @${h} lỗi:`, e.message);
         }
       }
+
+      // 4) exclusive: giữ tài khoản Bloom CHỈ gồm handle mình watch (dùng cho account Bloom RIÊNG).
+      if (cfg.sourceExclusive) {
+        for (const a of accounts) {
+          if (!activeIds.has(a.id)) continue;
+          try {
+            const key = await this.keyFor(a.session_token);
+            const state = await fetchState(a.session_token, key);
+            const orphanIds = state.filter((x) => x.twitter_handle && !x.hidden && !desired.has(String(x.twitter_handle).toLowerCase())).map((x) => x.twitter_id).filter(Boolean);
+            for (let i = 0; i < orphanIds.length; i += 100)
+              await untrackIds(a.session_token, key, orphanIds.slice(i, i + 100)).catch(() => {});
+            if (orphanIds.length) { console.log(`[tracker-sync] exclusive: untrack ${orphanIds.length} orphan (shard ${a.id})`); this.alert(`exclusive: đã untrack ${orphanIds.length} account thừa (shard ${a.id}).`); }
+          } catch (e) { console.warn("[tracker-sync] exclusive lỗi:", e.message); }
+        }
+      }
     } finally { this.busy = false; }
   }
 
-  async untrack(account, handle) {
-    if (!account) return;
+  async untrack(account, id, handle) {
+    if (!account || !id) return;                       // cần twitter_id để untrack
     const key = await this.keyFor(account.session_token);
-    await untrackNames(account.session_token, key, [handle]);
-    console.log(`[tracker-sync] untrack @${handle} (shard ${account.id})`);
+    await untrackIds(account.session_token, key, [id]);
+    console.log(`[tracker-sync] untrack @${handle} (id ${id}, shard ${account.id})`);
   }
 
   start(intervalMs = 20000) {
