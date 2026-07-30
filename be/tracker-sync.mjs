@@ -78,7 +78,7 @@ export class TrackerSync {
         let xid = await repo.xidForHandle(h);
         try {
           const key = await this.keyFor(shard.session_token);
-          if (!xid) { const s = await searchUsers(shard.session_token, key, [h]); xid = s.found[0]?.twitter_id || null; }
+          if (!xid) { const s = await searchUsers(shard.session_token, key, [h]); xid = s.found[0]?.id || null; }
           await trackNames(shard.session_token, key, [h]);
           await repo.upsertTracked(h, xid, shard.id, await repo.refCount(h));
           load.set(shard.id, (load.get(shard.id) || 0) + 1);

@@ -68,14 +68,14 @@ export async function listWatches(tgId) { return col("watches").find({ tg_id: Nu
 export async function getWatch(tgId, handle) { return col("watches").findOne({ _id: wid(tgId, handle) }); }
 export async function countWatches(tgId) { return col("watches").countDocuments({ tg_id: Number(tgId) }); }
 
-// Thêm watch với preset = global_settings hiện tại (đông cứng lúc add).
+// Thêm watch. settings=null => KẾ THỪA global; chỉ tạo override khi user chỉnh riêng
+// account (setWatchSetting). Nhờ vậy bật/tắt ở Global Settings áp cho mọi account chưa customize.
 export async function addWatch(tgId, handle, xUserId = null) {
   tgId = Number(tgId);
   const h = handle.toLowerCase().replace(/^@/, "");
-  const preset = await getGlobalSettings(tgId);
   await col("watches").updateOne(
     { _id: wid(tgId, h) },
-    { $setOnInsert: { tg_id: tgId, handle: h, x_user_id: xUserId, settings: preset, created_at: now() } },
+    { $setOnInsert: { tg_id: tgId, handle: h, x_user_id: xUserId, settings: null, created_at: now() } },
     { upsert: true });
   return getWatch(tgId, h);
 }

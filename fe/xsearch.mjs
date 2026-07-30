@@ -22,7 +22,7 @@ export async function resolveHandle(handle) {
     const { found } = await searchUsers(acc.session_token, key, [handle]);
     const u = found[0];
     if (!u) return { found: false };
-    return { found: true, xid: u.twitter_id || null, handle: (u.twitter_handle || u.screen_name || handle).replace(/^@/, "") };
+    return { found: true, xid: u.id || null, handle: (u.handle || u.username || handle).replace(/^@/, "") };
   } catch (e) {
     console.warn("[xsearch]", e.message);
     return { skipped: true };
