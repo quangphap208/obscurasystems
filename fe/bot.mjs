@@ -78,6 +78,22 @@ bot.command("remove", async (ctx) => {
   await ctx.reply(ok ? `✅ Unfollowed <b>@${esc(handle)}</b>.` : `<b>@${esc(handle)}</b> is not in your list.`, HTML());
 });
 
+// ---------- /accounts /settings /support ----------
+bot.command("accounts", async (ctx) => {
+  await repo.ensureUser(ctx.from.id, ctx.from.username);
+  await show(ctx, accountsScreen(await repo.listWatches(ctx.from.id)));
+});
+bot.command("settings", async (ctx) => {
+  await repo.ensureUser(ctx.from.id, ctx.from.username);
+  await show(ctx, globalSettingsScreen(await repo.getGlobalSettings(ctx.from.id)));
+});
+bot.command("support", async (ctx) => {
+  const line = cfg.supportContact
+    ? `Contact <b>${esc(cfg.supportContact)}</b> for help.`
+    : `Message us here and the team will get back to you.`;
+  await ctx.reply(`💬 <b>Support</b>\n\n${line}`, HTML());
+});
+
 // ---------- /subscribe + thanh toán Telegram Stars ----------
 bot.command("subscribe", async (ctx) => {
   const u = await repo.ensureUser(ctx.from.id, ctx.from.username);
@@ -173,11 +189,9 @@ await bot.api.setMyCommands([
   { command: "remove", description: "/remove username | stop tracking an account" },
   { command: "accounts", description: "view tracked accounts" },
   { command: "settings", description: "notification settings per account" },
-  { command: "bulkremove", description: "remove several accounts at once" },
-  { command: "mute", description: "/mute username | pause alerts without untracking" },
-  { command: "ca", description: "/ca username | contract addresses found in tweets and images" },
   { command: "subscribe", description: "upgrade your plan" },
   { command: "support", description: "contact support" },
+  // ẩn tạm cho tới khi có handler: bulkremove, mute, ca
 ]);
 console.log(`FE bot @${BOT_USER} running.`);
 

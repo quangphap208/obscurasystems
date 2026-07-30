@@ -41,6 +41,7 @@ export const cfg = {
   proLimit: Number(process.env.PRO_LIMIT || 25),
   freeLimit: Number(process.env.FREE_LIMIT || 3),
   botLabel: process.env.BOT_LABEL || "🕶️ Obscura",
+  supportContact: process.env.SUPPORT_CONTACT || "",   // vd @obscura_support (dùng cho /support)
   warmupMs: Number(process.env.WARMUP_MS || 12000),
   headless: process.env.HEADLESS !== "0",
 };
