@@ -5,7 +5,7 @@ import { cfg, assertFE, isAdmin } from "../shared/config.mjs";
 import { connect, close } from "../shared/mongo.mjs";
 import * as repo from "../shared/repo.mjs";
 import { byKey, GATE_TEXT } from "../shared/settings.mjs";
-import { resolveHandle } from "./xsearch.mjs";
+import { resolveHandle, parseHandle } from "./xsearch.mjs";
 import {
   welcomeScreen, referralScreen, globalSettingsScreen, accountSettingsScreen,
   accountsScreen, subscribeScreen, esc,
@@ -59,8 +59,8 @@ async function qaReply(ctx, handle) {
 
 // ---------- /add /remove ----------
 bot.command("add", async (ctx) => {
-  const handle = (ctx.match || "").trim().replace(/^@/, "").toLowerCase();
-  if (!handle || !/^\w{1,15}$/.test(handle)) return ctx.reply("Usage: <b>/add &lt;username&gt;</b>", HTML());
+  const handle = parseHandle(ctx.match);
+  if (!handle) return ctx.reply("Usage: <b>/add &lt;username or link&gt;</b>\ne.g. <code>/add elonmusk</code> or <code>/add https://x.com/elonmusk</code>", HTML());
   const u = await repo.ensureUser(ctx.from.id, ctx.from.username);
   if (await repo.getWatch(ctx.from.id, handle)) return ctx.reply(`Already watching <b>@${esc(handle)}</b>.`, HTML());
   const n = await repo.countWatches(ctx.from.id);
@@ -72,8 +72,8 @@ bot.command("add", async (ctx) => {
 });
 
 bot.command("remove", async (ctx) => {
-  const handle = (ctx.match || "").trim().replace(/^@/, "").toLowerCase();
-  if (!handle) return ctx.reply("Usage: <b>/remove &lt;username&gt;</b>", HTML());
+  const handle = parseHandle(ctx.match);
+  if (!handle) return ctx.reply("Usage: <b>/remove &lt;username or link&gt;</b>", HTML());
   const ok = await repo.removeWatch(ctx.from.id, handle);
   await ctx.reply(ok ? `✅ Unfollowed <b>@${esc(handle)}</b>.` : `<b>@${esc(handle)}</b> is not in your list.`, HTML());
 });
