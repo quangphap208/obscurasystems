@@ -25,16 +25,20 @@ const FEED_FIELDS = [
   { key: "name", sub: "screenname" },
 ];
 
+// Chuẩn hoá URL avatar về khoá ỔN ĐỊNH: bỏ hậu tố kích cỡ (_normal/_bigger/_mini/_400x400…) + query.
+// Cùng 1 ảnh: feed trả `_400x400`, search trả `_normal` — không chuẩn hoá sẽ sinh "đổi avatar" GIẢ và
+// ping-pong vô hạn giữa 2 path (mỗi lần lật = 1 noti). Bản đã bỏ hậu tố = ảnh gốc full-res, dùng luôn preview.
+const canonAvatar = (url) => (String(url || "")
+  .replace(/\?.*$/, "")
+  .replace(/_(normal|bigger|mini|reasonably_small|\d+x\d+)(?=\.\w+$)/i, "")) || null;
+
 const snapOf = (u) => ({
   x_user_id: u.id != null ? String(u.id) : null,
-  avatar: u.profile_image_url || null,
+  avatar: canonAvatar(u.profile_image_url),
   name: u.name || null,
   handle: (u.handle || u.username || "") || null,
   verified: u.verified_type || "",
 });
-
-// ảnh preview: bỏ hậu tố _normal để lấy bản gốc (avatar search trả về là thumbnail 48px).
-const fullImg = (url) => String(url || "").replace(/_normal(?=\.\w+($|\?))/, "");
 
 export class ProfilePoller {
   constructor({ pool, dispatch, adminIds = [] }) {
@@ -57,15 +61,16 @@ export class ProfilePoller {
     if (!handle) return;
     const prev = this.snap.get(handle);
     if (!prev) return;              // chưa có baseline (poll chưa seed) -> để poll seed đầy đủ trước
-    const cur = { avatar: u.profile_image_url || null, name: u.name || null };
+    const cur = { avatar: canonAvatar(u.profile_image_url), name: u.name || null };
     const xid = u.id != null ? String(u.id) : prev.x_user_id;
-    const diffs = FEED_FIELDS.filter((f) => cur[f.key] != null && prev[f.key] !== cur[f.key]);
+    const prevVal = (f) => f.key === "avatar" ? canonAvatar(prev[f.key]) : (prev[f.key] ?? null);
+    const diffs = FEED_FIELDS.filter((f) => cur[f.key] != null && prevVal(f) !== cur[f.key]);
     if (!diffs.length) return;
     for (const f of diffs) {
-      const e = makeProfileEvent(f.sub, prev[f.key] ?? null, cur[f.key], { authorId: xid, actor: handle });
-      if (f.sub === "profile_picture") e.images = [fullImg(cur.avatar)];
+      const e = makeProfileEvent(f.sub, prevVal(f), cur[f.key], { authorId: xid, actor: handle });
+      if (f.sub === "profile_picture") e.images = [cur.avatar];
       await this.dispatch(e);
-      console.log(`[profile-feed] @${handle} ${f.sub}: ${prev[f.key] ?? "∅"} -> ${cur[f.key]}`);
+      console.log(`[profile-feed] @${handle} ${f.sub}: ${prevVal(f) ?? "∅"} -> ${cur[f.key]}`);
     }
     const merged = { ...prev, ...cur };
     this.snap.set(handle, merged);
@@ -113,15 +118,16 @@ export class ProfilePoller {
         const cur = snapOf(u);
         const prev = this.snap.get(h) || snaps.get(h);   // ưu tiên mirror in-memory (feed cập nhật giữa 2 lượt)
         if (!prev) { this.snap.set(h, cur); await repo.setProfileSnap(h, cur); continue; }   // seed, không bắn
-        const diffs = FIELDS.filter((f) => cur[f.key] != null && (prev[f.key] ?? null) !== cur[f.key]);
+        const prevVal = (f) => f.key === "avatar" ? canonAvatar(prev[f.key]) : (prev[f.key] ?? null);
+        const diffs = FIELDS.filter((f) => cur[f.key] != null && prevVal(f) !== cur[f.key]);
         this.snap.set(h, { ...prev, ...cur });           // luôn cập nhật mirror (kể cả khi không đổi)
         if (!diffs.length) continue;
         for (const f of diffs) {
-          const e = makeProfileEvent(f.sub, prev[f.key] ?? null, cur[f.key], { authorId: cur.x_user_id, actor: h });
-          if (f.sub === "profile_picture") e.images = [fullImg(cur.avatar)];
+          const e = makeProfileEvent(f.sub, prevVal(f), cur[f.key], { authorId: cur.x_user_id, actor: h });
+          if (f.sub === "profile_picture") e.images = [cur.avatar];
           await this.dispatch(e);
           changed++;
-          console.log(`[profile-poll] @${h} ${f.sub}: ${prev[f.key] ?? "∅"} -> ${cur[f.key]}`);
+          console.log(`[profile-poll] @${h} ${f.sub}: ${prevVal(f) ?? "∅"} -> ${cur[f.key]}`);
         }
         await repo.setProfileSnap(h, cur);
       }
