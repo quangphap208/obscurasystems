@@ -49,7 +49,7 @@ export const cfg = {
   headless: process.env.HEADLESS !== "0",
   // profile-poller: tự dò đổi avatar/name/verified qua search (tracker-state Bloom quá chậm).
   profilePoll: process.env.PROFILE_POLL !== "0",
-  profilePollMs: Number(process.env.PROFILE_POLL_MS || 300000),   // 5 phút
+  profilePollMs: Number(process.env.PROFILE_POLL_MS || 120000),   // fallback 2 phút (feed-driven lo real-time)
 };
 
 export function assertFE() {

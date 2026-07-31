@@ -18,6 +18,12 @@ const FIELDS = [
   { key: "name", sub: "screenname" },
   { key: "verified", sub: "verified_badge" },
 ];
+// Field feed (author trên mỗi tweet) mang đáng tin: avatar + name. verified để poll lo
+// (feed không chắc có verified_type -> tránh flapping ∅↔giá trị).
+const FEED_FIELDS = [
+  { key: "avatar", sub: "profile_picture" },
+  { key: "name", sub: "screenname" },
+];
 
 const snapOf = (u) => ({
   x_user_id: u.id != null ? String(u.id) : null,
@@ -34,6 +40,36 @@ export class ProfilePoller {
   constructor({ pool, dispatch, adminIds = [] }) {
     this.pool = pool; this.dispatch = dispatch; this.adminIds = adminIds;
     this.keys = new Map(); this.busy = false; this._accounts = [];
+    this.snap = new Map();        // handle -> snapshot mới nhất (mirror in-memory cho feed-driven)
+  }
+
+  // Feed-driven: gọi từ onFrame với mỗi frame. Lấy author trên tweet-like, diff avatar/name
+  // ngay lập tức (không chờ poll). Bỏ qua nếu handle chưa được poll seed đầy đủ (tránh false verified).
+  observeFrame(frame) {
+    const t = frame?.type;
+    if (!["tweet", "retweet", "quote", "reply"].includes(t)) return;
+    const a = frame.data?.author;
+    if (a && (a.screen_name || a.handle || a.username)) this.observe(a).catch(() => {});
+  }
+
+  async observe(u) {
+    const handle = String(u.screen_name || u.handle || u.username || "").toLowerCase();
+    if (!handle) return;
+    const prev = this.snap.get(handle);
+    if (!prev) return;              // chưa có baseline (poll chưa seed) -> để poll seed đầy đủ trước
+    const cur = { avatar: u.profile_image_url || null, name: u.name || null };
+    const xid = u.id != null ? String(u.id) : prev.x_user_id;
+    const diffs = FEED_FIELDS.filter((f) => cur[f.key] != null && prev[f.key] !== cur[f.key]);
+    if (!diffs.length) return;
+    for (const f of diffs) {
+      const e = makeProfileEvent(f.sub, prev[f.key] ?? null, cur[f.key], { authorId: xid, actor: handle });
+      if (f.sub === "profile_picture") e.images = [fullImg(cur.avatar)];
+      await this.dispatch(e);
+      console.log(`[profile-feed] @${handle} ${f.sub}: ${prev[f.key] ?? "∅"} -> ${cur[f.key]}`);
+    }
+    const merged = { ...prev, ...cur };
+    this.snap.set(handle, merged);
+    await repo.setProfileSnap(handle, { avatar: merged.avatar, name: merged.name }).catch(() => {});
   }
 
   async keyFor(session) {
@@ -75,9 +111,10 @@ export class ProfilePoller {
       let changed = 0;
       for (const [h, u] of live) {
         const cur = snapOf(u);
-        const prev = snaps.get(h);
-        if (!prev) { await repo.setProfileSnap(h, cur); continue; }   // seed, không bắn
+        const prev = this.snap.get(h) || snaps.get(h);   // ưu tiên mirror in-memory (feed cập nhật giữa 2 lượt)
+        if (!prev) { this.snap.set(h, cur); await repo.setProfileSnap(h, cur); continue; }   // seed, không bắn
         const diffs = FIELDS.filter((f) => cur[f.key] != null && (prev[f.key] ?? null) !== cur[f.key]);
+        this.snap.set(h, { ...prev, ...cur });           // luôn cập nhật mirror (kể cả khi không đổi)
         if (!diffs.length) continue;
         for (const f of diffs) {
           const e = makeProfileEvent(f.sub, prev[f.key] ?? null, cur[f.key], { authorId: cur.x_user_id, actor: h });

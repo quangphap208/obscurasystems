@@ -30,9 +30,10 @@ async function main() {
   }
   console.log(`Pool: ${accounts.length} tài khoản Bloom`, accounts.map((a) => `#${a.id}(${a.label || "bloom"})`).join(" "));
 
+  let poller = null;   // gán bên dưới; onFrame tham chiếu qua closure (chạy sau khi đã gán).
   const pool = new BloomPool({
     headless: cfg.headless,
-    onFrame: (frame) => dispatch(normalize(frame)),
+    onFrame: (frame) => { poller?.observeFrame(frame); dispatch(normalize(frame)); },
     onExpired: async (acc) => {
       await repo.setBloomStatus(acc.id, "expired");
       for (const id of cfg.adminIds) tg.notify(id, `⚠️ <b>Shard #${acc.id}</b> (${acc.label || "source"}) session expired. Update the token and restart the engine.`);
@@ -46,12 +47,11 @@ async function main() {
   sync.start(20000);
   // prune do Mongo TTL index tự lo (tweet_cache, deliveries).
 
-  // profile-poller: tự dò đổi avatar/name/verified (Bloom's tracker-state cập nhật quá chậm).
-  let poller = null;
+  // profile-poller: feed-driven (real-time cho account có tweet) + poll fallback cho account im lặng.
   if (cfg.profilePoll) {
     poller = new ProfilePoller({ pool, dispatch, adminIds: cfg.adminIds });
     poller.start(cfg.profilePollMs);
-    console.log(`Profile-poller: dò đổi profile mỗi ${cfg.profilePollMs / 1000}s (avatar/name/verified).`);
+    console.log(`Profile: feed-driven real-time + poll fallback mỗi ${cfg.profilePollMs / 1000}s (avatar/name/verified).`);
   }
 
   console.log(`Engine chạy. Bỏ qua backlog ${cfg.warmupMs / 1000}s rồi bắt đầu gửi.`);
