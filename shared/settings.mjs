@@ -34,9 +34,9 @@ export const SETTINGS = [
   { key: "deactivations",    col: "deactivations",     group: "cn",  def: 1, gate: null },
 ];
 
-// OCR đứng riêng ngoài 2 nhóm. Bloom CÓ hỗ trợ (useOcr) — nhưng để v1 an toàn, gate 'coming'
-// (bật enrichment/OCR sẽ nối ở bản sau). Đổi gate=null khi wired.
-export const OCR = { key: "OCR", col: "ocr", group: "ocr", def: 0, gate: "coming" };
+// OCR đứng riêng ngoài 2 nhóm. Bloom CÓ hỗ trợ (useOcr) nhưng chưa wired -> ẩn khỏi UI (hidden)
+// cho tới khi nối enrichment/OCR. Bỏ hidden (và gate) khi wired xong.
+export const OCR = { key: "OCR", col: "ocr", group: "ocr", def: 0, gate: "coming", hidden: true };
 
 export const ALL_KEYS = [OCR, ...SETTINGS];
 export const byKey = Object.fromEntries(ALL_KEYS.map((s) => [s.key, s]));

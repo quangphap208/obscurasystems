@@ -47,9 +47,8 @@ export function referralScreen(botUser, tgId, stats) {
 // #7 Global Settings (và dùng lại cho per-account)
 const SETTINGS_TEXT =
   `⚙️ Global Settings ⚙️\n\n` +
-  `🔎 <b>OCR</b> ⇢ <i>Automatically detect SOL &amp; EVM contracts from images</i>\n\n` +
   `📨 <b>Preset For New Accounts</b> ⇢ <i>Set default settings for when you add a new account. That way you don't have to set these every time.</i>\n\n` +
-  `⚒ <b>Custom Notifications</b> ⇢ <i>Get trendingProfiles &amp; trendingTweets scanned across thousands of telegram channels &amp; groups.</i>\n\n` +
+  `⚒ <b>Custom Notifications</b> ⇢ <i>Get alerted when a tracked account is suspended or deactivated.</i>\n\n` +
   `❌ = <b>Disabled</b> | Tap to enable/disable a setting.`;
 
 // scope: {type:'g'} hoặc {type:'w', handle}. cb() dựng callback_data cho 1 khoá.
@@ -59,7 +58,7 @@ function settingsKeyboard(values, scope) {
   const btn = (kb, s) => kb.text(label(s, on(s)), cb(s.key));
   const kb = new InlineKeyboard();
 
-  btn(kb, OCR).row();                                   // OCR
+  if (!OCR.hidden) btn(kb, OCR).row();                  // OCR (ẩn cho tới khi wired)
   kb.text("---- New Accounts ----", "none").row();
   const newAcc = SETTINGS.filter((s) => s.group === "new" && !s.hidden);
   for (let i = 0; i < newAcc.length; i += 2) {
