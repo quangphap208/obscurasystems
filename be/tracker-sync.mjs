@@ -89,18 +89,54 @@ export class TrackerSync {
         }
       }
 
-      // 4) exclusive: giữ tài khoản Bloom CHỈ gồm handle mình watch (dùng cho account Bloom RIÊNG).
-      if (cfg.sourceExclusive) {
-        for (const a of accounts) {
-          if (!activeIds.has(a.id)) continue;
-          try {
-            const key = await this.keyFor(a.session_token);
-            const state = await fetchState(a.session_token, key);
-            const orphanIds = state.filter((x) => x.twitter_handle && !x.hidden && !desired.has(String(x.twitter_handle).toLowerCase())).map((x) => x.twitter_id).filter(Boolean);
-            for (let i = 0; i < orphanIds.length; i += 100)
-              await untrackIds(a.session_token, key, orphanIds.slice(i, i + 100)).catch(() => {});
-            if (orphanIds.length) { console.log(`[tracker-sync] exclusive: untrack ${orphanIds.length} orphan (shard ${a.id})`); this.alert(`exclusive: đã untrack ${orphanIds.length} account thừa (shard ${a.id}).`); }
-          } catch (e) { console.warn("[tracker-sync] exclusive lỗi:", e.message); }
+      // 4) đối chiếu STATE THẬT của Bloom (không chỉ tin tracked_handles).
+      const activeAccounts = accounts.filter((a) => activeIds.has(a.id));
+      if (activeAccounts.length && desired.size) {
+        // fetch state 1 lần / shard
+        const states = new Map();
+        for (const a of activeAccounts) {
+          try { states.set(a.id, await fetchState(a.session_token, await this.keyFor(a.session_token))); }
+          catch (e) { console.warn("[tracker-sync] fetchState lỗi shard", a.id, e.message); }
+        }
+        const visibleAll = new Set();
+        for (const st of states.values())
+          for (const x of st) if (!x.hidden) visibleAll.add(String(x.twitter_handle || "").toLowerCase());
+
+        // 4a) SELF-HEAL: handle mình watch nhưng KHÔNG visible trên Bloom (track fail âm thầm / Bloom
+        //     drop / sót từ account cũ) -> track lại trên shard đã gán (hoặc shard sống đầu tiên).
+        const missing = [...desired].filter((h) => !visibleAll.has(h));
+        if (missing.length) {
+          const assign = new Map((await repo.allTracked()).map((t) => [t.handle, t.bloom_account_id]));
+          const byShard = new Map();
+          for (const h of missing) {
+            let sid = assign.get(h);
+            if (sid == null || !activeIds.has(sid)) sid = activeAccounts[0].id;
+            (byShard.get(sid) || byShard.set(sid, []).get(sid)).push(h);
+          }
+          for (const [sid, hs] of byShard) {
+            const a = accById.get(sid);
+            try {
+              const key = await this.keyFor(a.session_token);
+              for (let i = 0; i < hs.length; i += 100) await trackNames(a.session_token, key, hs.slice(i, i + 100));
+              console.log(`[tracker-sync] self-heal: track lại ${hs.length} handle thiếu trên shard ${sid}: ${hs.join(", ")}`);
+              this.alert(`self-heal: track lại ${hs.length} account bị thiếu trên shard ${sid}.`);
+            } catch (e) { console.warn("[tracker-sync] self-heal lỗi:", e.message); }
+          }
+        }
+
+        // 4b) exclusive: giữ account Bloom CHỈ gồm handle mình watch (untrack phần thừa).
+        if (cfg.sourceExclusive) {
+          for (const a of activeAccounts) {
+            const st = states.get(a.id); if (!st) continue;
+            const orphanIds = st.filter((x) => x.twitter_handle && !x.hidden && !desired.has(String(x.twitter_handle).toLowerCase())).map((x) => x.twitter_id).filter(Boolean);
+            if (!orphanIds.length) continue;
+            try {
+              const key = await this.keyFor(a.session_token);
+              for (let i = 0; i < orphanIds.length; i += 100) await untrackIds(a.session_token, key, orphanIds.slice(i, i + 100)).catch(() => {});
+              console.log(`[tracker-sync] exclusive: untrack ${orphanIds.length} orphan (shard ${a.id})`);
+              this.alert(`exclusive: đã untrack ${orphanIds.length} account thừa (shard ${a.id}).`);
+            } catch (e) { console.warn("[tracker-sync] exclusive lỗi:", e.message); }
+          }
         }
       }
     } finally { this.busy = false; }
