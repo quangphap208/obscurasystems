@@ -82,18 +82,8 @@ export function normalize(frame) {
         profileCard: profileCard(tgt), images: [], hasVideo: false,
       };
     }
-    if (ev.startsWith("profile.update.")) {
-      const field = ev.slice("profile.update.".length);
-      if (field === "affiliate_badge")
-        return { kind: "affiliation", authorId: actorId, actor: null, content: typeof after === "string" ? after : "", images: [], hasVideo: false };
-      const img = field === "profile_picture" || field === "banner_picture";
-      return {
-        kind: "profileChanges", field, authorId: actorId, actor: null,
-        oldValue: before ?? null, newValue: after ?? null,
-        content: buildProfileBody(field, before, after),
-        images: img && typeof after === "string" ? [after] : [], hasVideo: false,
-      };
-    }
+    if (ev.startsWith("profile.update."))
+      return makeProfileEvent(ev.slice("profile.update.".length), before, after, { authorId: actorId });
     return null;
   }
 
@@ -109,6 +99,21 @@ export function normalize(frame) {
     content, tweetId: d.id || null,
     target: d.parent_tweet?.author?.screen_name || null, parentId: d.parent_tweet?.id || null,
     images, hasVideo: videos.length > 0, createdAt: d.tweet_created_at || null,
+  };
+}
+
+// Dựng event chuẩn hoá cho 1 thay đổi profile — dùng chung cho normalize (frame Bloom)
+// và profile-poller (tự dò qua search). field = subtype profile.update (bio/screenname/
+// handle/profile_picture/banner_picture/url/geo/verified_badge/affiliate_badge).
+export function makeProfileEvent(field, before, after, { authorId = null, actor = null } = {}) {
+  if (field === "affiliate_badge")
+    return { kind: "affiliation", authorId, actor, content: typeof after === "string" ? after : "", images: [], hasVideo: false };
+  const img = field === "profile_picture" || field === "banner_picture";
+  return {
+    kind: "profileChanges", field, authorId, actor,
+    oldValue: before ?? null, newValue: after ?? null,
+    content: buildProfileBody(field, before, after),
+    images: img && typeof after === "string" ? [after] : [], hasVideo: false,
   };
 }
 

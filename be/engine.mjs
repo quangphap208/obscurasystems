@@ -8,6 +8,7 @@ import { normalize } from "./lib/format.mjs";
 import { makeDispatcher } from "./dispatcher.mjs";
 import { BloomPool } from "./pool.mjs";
 import { TrackerSync } from "./tracker-sync.mjs";
+import { ProfilePoller } from "./profile-poller.mjs";
 
 assertBE();
 
@@ -45,9 +46,17 @@ async function main() {
   sync.start(20000);
   // prune do Mongo TTL index tự lo (tweet_cache, deliveries).
 
+  // profile-poller: tự dò đổi avatar/name/verified (Bloom's tracker-state cập nhật quá chậm).
+  let poller = null;
+  if (cfg.profilePoll) {
+    poller = new ProfilePoller({ pool, dispatch, adminIds: cfg.adminIds });
+    poller.start(cfg.profilePollMs);
+    console.log(`Profile-poller: dò đổi profile mỗi ${cfg.profilePollMs / 1000}s (avatar/name/verified).`);
+  }
+
   console.log(`Engine chạy. Bỏ qua backlog ${cfg.warmupMs / 1000}s rồi bắt đầu gửi.`);
 
-  const shutdown = async () => { sync.stop(); await pool.stopAll(); await close().catch(() => {}); process.exit(0); };
+  const shutdown = async () => { sync.stop(); poller?.stop(); await pool.stopAll(); await close().catch(() => {}); process.exit(0); };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 }

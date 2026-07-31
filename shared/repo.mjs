@@ -174,6 +174,16 @@ export async function setTrackedRef(handle, ref) { await col("tracked_handles").
 export async function deleteTracked(handle) { await col("tracked_handles").deleteOne({ _id: handle.toLowerCase() }); }
 export async function touchTracked(handle) { await col("tracked_handles").updateOne({ _id: handle.toLowerCase() }, { $set: { last_event_at: now() } }); }
 
+// ---------- profile snapshots (profile-poller tự dò đổi avatar/name/verified) ----------
+export async function getProfileSnaps(handles) {
+  const ids = handles.map((h) => h.toLowerCase());
+  const rows = await col("profile_snap").find({ _id: { $in: ids } }).toArray();
+  return new Map(rows.map((r) => [r._id, r]));
+}
+export async function setProfileSnap(handle, snap) {
+  await col("profile_snap").updateOne({ _id: handle.toLowerCase() }, { $set: { ...snap, updated_at: now() } }, { upsert: true });
+}
+
 // ---------- tweet cache (TTL index tự prune) ----------
 export async function cacheTweet({ tweet_id, author_handle, text, media, is_retweet, rt_source }) {
   if (!tweet_id) return;

@@ -47,6 +47,9 @@ export const cfg = {
   supportContact: process.env.SUPPORT_CONTACT || "",   // vd @obscura_support (dùng cho /support)
   warmupMs: Number(process.env.WARMUP_MS || 12000),
   headless: process.env.HEADLESS !== "0",
+  // profile-poller: tự dò đổi avatar/name/verified qua search (tracker-state Bloom quá chậm).
+  profilePoll: process.env.PROFILE_POLL !== "0",
+  profilePollMs: Number(process.env.PROFILE_POLL_MS || 300000),   // 5 phút
 };
 
 export function assertFE() {
