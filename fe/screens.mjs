@@ -5,14 +5,18 @@ import { SETTINGS, OCR, byKey, label } from "../shared/settings.mjs";
 
 const BOT_NAME = "Obscura Systems";
 
+// Free = gói nền, KHÔNG có hạn (expires_at=null) -> "Never". Chỉ tier trả phí đã qua hạn mới EXPIRED.
+const isFreeTier = (u) => !u?.tier || u.tier === "Free";
+const isPlanExpired = (u) => !isFreeTier(u) && (!u?.expires_at || u.expires_at < Date.now());
 const fmtExp = (u) => {
-  if (!u?.expires_at || u.expires_at < Date.now()) return "EXPIRED";
+  if (isFreeTier(u)) return "Never";
+  if (isPlanExpired(u)) return "EXPIRED";
   return new Date(u.expires_at).toISOString().slice(0, 10);
 };
 
 // #1 Welcome
 export function welcomeScreen(user, nWatched, botUser) {
-  const expired = !user?.expires_at || user.expires_at < Date.now();
+  const expired = isPlanExpired(user);
   let text =
     `Welcome to ${BOT_NAME}, <b>${esc(user?.username || "there")}</b> 👋\n\n` +
     `📊 Your plan:\n` +
