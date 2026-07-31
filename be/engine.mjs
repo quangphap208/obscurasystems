@@ -54,9 +54,13 @@ async function main() {
     console.log(`Profile: feed-driven real-time + poll fallback mỗi ${cfg.profilePollMs / 1000}s (avatar/name/verified).`);
   }
 
+  // user_stats: rollup định kỳ (xem trong Atlas / scripts/stats.mjs) — ai add bao nhiêu account.
+  repo.refreshUserStats().catch(() => {});
+  const statsTimer = setInterval(() => repo.refreshUserStats().catch(() => {}), 60000);
+
   console.log(`Engine chạy. Bỏ qua backlog ${cfg.warmupMs / 1000}s rồi bắt đầu gửi.`);
 
-  const shutdown = async () => { sync.stop(); poller?.stop(); await pool.stopAll(); await close().catch(() => {}); process.exit(0); };
+  const shutdown = async () => { sync.stop(); poller?.stop(); clearInterval(statsTimer); await pool.stopAll(); await close().catch(() => {}); process.exit(0); };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 }

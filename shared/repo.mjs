@@ -184,6 +184,41 @@ export async function setProfileSnap(handle, snap) {
   await col("profile_snap").updateOne({ _id: handle.toLowerCase() }, { $set: { ...snap, updated_at: now() } }, { upsert: true });
 }
 
+// ---------- user_stats (rollup: mỗi bot-user add bao nhiêu account X — phần "ngoài default") ----------
+// 1 doc / user + 1 doc "__totals__". Refresh định kỳ ở BE (engine) và có scripts/stats.mjs xem tay.
+// "ngoài default" = chính các handle user tự add (watches); default của Bloom không nằm ở đây.
+export async function refreshUserStats() {
+  const watches = await col("watches").find({}).project({ tg_id: 1, handle: 1 }).toArray();
+  const byUser = new Map();          // tg_id -> [handle]
+  const distinct = new Set();        // tổng account custom (ngoài default)
+  for (const w of watches) {
+    distinct.add(w.handle);
+    if (!byUser.has(w.tg_id)) byUser.set(w.tg_id, []);
+    byUser.get(w.tg_id).push(w.handle);
+  }
+  const ids = [...byUser.keys()];
+  const users = ids.length ? await col("users").find({ _id: { $in: ids } }).toArray() : [];
+  const uMap = new Map(users.map((u) => [u._id, u]));
+  const shards = await listBloomAccounts(false);
+  const capacity = shards.reduce((s, a) => s + (a.capacity || 0), 0);
+  const ts = new Date();
+
+  const ops = [];
+  for (const [tgId, handles] of byUser) {
+    const u = uMap.get(tgId) || {};
+    ops.push({ updateOne: { filter: { _id: tgId }, update: { $set: {
+      username: u.username || null, tier: u.tier || "Free", account_limit: u.account_limit ?? null,
+      added: handles.length, handles: handles.sort(), updated_at: ts,
+    } }, upsert: true } });
+  }
+  ops.push({ updateOne: { filter: { _id: "__totals__" }, update: { $set: {
+    users: byUser.size, custom_accounts: distinct.size, capacity, updated_at: ts,
+  } }, upsert: true } });
+  await col("user_stats").bulkWrite(ops);
+  await col("user_stats").deleteMany({ _id: { $nin: [...ids, "__totals__"] } });   // dọn user đã remove hết
+  return { users: byUser.size, custom_accounts: distinct.size, capacity };
+}
+
 // ---------- tweet cache (TTL index tự prune) ----------
 export async function cacheTweet({ tweet_id, author_handle, text, media, is_retweet, rt_source }) {
   if (!tweet_id) return;
