@@ -87,11 +87,37 @@ bot.command("settings", async (ctx) => {
   await repo.ensureUser(ctx.from.id, ctx.from.username);
   await show(ctx, globalSettingsScreen(await repo.getGlobalSettings(ctx.from.id)));
 });
+// /support <message> -> forward thẳng tới DM admin (không lưu DB). Rate-limit 60s/user + cap 1000 ký tự.
+const supportCooldown = new Map();   // tgId -> last ts (in-memory; reset khi restart)
 bot.command("support", async (ctx) => {
-  const line = cfg.supportContact
-    ? `Contact <b>${esc(cfg.supportContact)}</b> for help.`
-    : `Message us here and the team will get back to you.`;
-  await ctx.reply(`💬 <b>Support</b>\n\n${line}`, HTML());
+  const msg = (ctx.match || "").trim().slice(0, 1000);
+  if (!msg) {
+    return ctx.reply(
+      `💬 <b>Support</b>\n\nDescribe your issue in one message, e.g.\n` +
+      `<code>/support Paid for Pro with Stars but it isn't active</code>` +
+      (cfg.supportContact ? `\n\nOr contact <b>${esc(cfg.supportContact)}</b> directly.` : ``),
+      HTML());
+  }
+  const now = Date.now();
+  if (now - (supportCooldown.get(ctx.from.id) || 0) < 60000)
+    return ctx.reply(`⏳ Please wait a moment before sending another support message.`, HTML());
+  if (!cfg.adminIds.length)
+    return ctx.reply(`⚠️ Support isn't configured yet.${cfg.supportContact ? ` Contact <b>${esc(cfg.supportContact)}</b>.` : ""}`, HTML());
+
+  const who = ctx.from.username ? `@${ctx.from.username}` : (ctx.from.first_name || "user");
+  const report =
+    `🆘 <b>Support request</b>\n` +
+    `👤 <b>${esc(who)}</b> (<code>${ctx.from.id}</code>)\n\n` +
+    `📝 ${esc(msg)}`;
+  let delivered = 0;
+  for (const adminId of cfg.adminIds) {
+    try { await ctx.api.sendMessage(adminId, report, HTML()); delivered++; }
+    catch (e) { console.warn("[support] admin", adminId, e.message); }
+  }
+  if (!delivered)
+    return ctx.reply(`❌ Couldn't reach support right now.${cfg.supportContact ? ` Please contact <b>${esc(cfg.supportContact)}</b>.` : " Please try again later."}`, HTML());
+  supportCooldown.set(ctx.from.id, now);
+  await ctx.reply(`✅ <b>Report sent!</b> The team will get back to you as soon as possible.`, HTML());
 });
 
 // ---------- /subscribe + thanh toán Telegram Stars ----------
@@ -191,7 +217,7 @@ await bot.api.setMyCommands([
   { command: "accounts", description: "view tracked accounts" },
   { command: "settings", description: "notification settings per account" },
   { command: "subscribe", description: "upgrade your plan" },
-  { command: "support", description: "contact support" },
+  { command: "support", description: "/support <message> | report an issue to the team" },
   // ẩn tạm cho tới khi có handler: bulkremove, mute, ca
 ]);
 console.log(`FE bot @${BOT_USER} running.`);
