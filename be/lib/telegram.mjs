@@ -22,7 +22,19 @@ export class Telegram {
     while (st.q.length) {
       const p = st.q.shift();
       try { await this._deliver(chatId, p); }
-      catch (e) { console.warn("[tg]", chatId, e.message); }
+      catch (e) {
+        // lỗi mạng tạm thời -> nhét lại đầu hàng, backoff dần (tối đa 5 lần ~2.5 phút) rồi mới bỏ.
+        // Lỗi cứng (400/403...) thì bỏ luôn: retry không cứu được.
+        const transient = /fetch failed|network|ECONN|ETIMEDOUT|EAI_AGAIN|socket|abort/i.test(e.message);
+        const tries = (p._tries = (p._tries || 0) + 1);
+        if (transient && tries <= 5) {
+          st.q.unshift(p);
+          console.warn(`[tg] ${chatId} ${e.message} — retry ${tries}/5`);
+          await new Promise((r) => setTimeout(r, Math.min(2000 * 3 ** (tries - 1), 60000)));
+          continue;
+        }
+        console.warn("[tg]", chatId, e.message, transient ? "(bỏ sau 5 lần retry)" : "");
+      }
       await new Promise((r) => setTimeout(r, 1100));
     }
     st.draining = false;
