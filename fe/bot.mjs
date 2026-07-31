@@ -20,6 +20,9 @@ let BOT_USER = null;
 const NOPREVIEW = { link_preview_options: { is_disabled: true } };
 const HTML = (extra = {}) => ({ parse_mode: "HTML", ...NOPREVIEW, ...extra });
 
+// /subscribe đang tắt trong giai đoạn test (cfg.subsEnabled=false). Thông báo chung.
+const SUBS_OFF_MSG = "🚧 <b>Subscriptions aren't open yet.</b>\nYou're in the early test group — enjoy the bot! Paid plans are coming soon.";
+
 // Gửi màn mới (reply) hoặc sửa tại chỗ (edit) tuỳ context.
 async function show(ctx, { text, keyboard }, edit = false) {
   const opts = HTML({ reply_markup: keyboard });
@@ -64,7 +67,7 @@ bot.command("add", async (ctx) => {
   const u = await repo.ensureUser(ctx.from.id, ctx.from.username);
   if (await repo.getWatch(ctx.from.id, handle)) return ctx.reply(`Already watching <b>@${esc(handle)}</b>.`, HTML());
   const n = await repo.countWatches(ctx.from.id);
-  if (n >= (u.account_limit ?? 0)) return ctx.reply(`⚠️ You've reached the <b>${u.account_limit}</b>-account limit of your <b>${esc(u.tier)}</b> plan.\nUse /subscribe to upgrade.`, HTML());
+  if (n >= (u.account_limit ?? 0)) return ctx.reply(`⚠️ You've reached the <b>${u.account_limit}</b>-account limit of your <b>${esc(u.tier)}</b> plan.${cfg.subsEnabled ? "\nUse /subscribe to upgrade." : ""}`, HTML());
   const r = await resolveHandle(handle);
   if (r.found === false) return ctx.reply(`❌ <b>@${esc(handle)}</b> not found on X.`, HTML());
   await repo.addWatch(ctx.from.id, r.found ? r.handle : handle, r.xid || null);
@@ -122,11 +125,13 @@ bot.command("support", async (ctx) => {
 
 // ---------- /subscribe + thanh toán Telegram Stars ----------
 bot.command("subscribe", async (ctx) => {
+  if (!cfg.subsEnabled) return ctx.reply(SUBS_OFF_MSG, HTML());
   const u = await repo.ensureUser(ctx.from.id, ctx.from.username);
   await show(ctx, subscribeScreen(u, cfg.proPriceStars, cfg.proDays, cfg.proLimit));
 });
 
 async function sendProInvoice(ctx) {
+  if (!cfg.subsEnabled) { await ctx.reply(SUBS_OFF_MSG, HTML()); return; }
   const other = cfg.starsProviderToken ? { provider_token: cfg.starsProviderToken } : {};
   await ctx.replyWithInvoice(
     "Pro Subscription", `Watch up to ${cfg.proLimit} accounts for ${cfg.proDays} days.`,
@@ -161,7 +166,10 @@ bot.on("callback_query:data", async (ctx) => {
     if (data === "viewAccounts") { await show(ctx, accountsScreen(await repo.listWatches(uid)), true); return ctx.answerCallbackQuery("Viewing accounts"); }
     if (data === "referrals") { await show(ctx, referralScreen(BOT_USER, uid, await repo.referralStats(uid)), true); return ctx.answerCallbackQuery("Viewing Referrals..."); }
     if (data === "globalsettings") { await show(ctx, globalSettingsScreen(await repo.getGlobalSettings(uid)), true); return ctx.answerCallbackQuery("Viewing global settings"); }
-    if (data === "subscribe") { await show(ctx, subscribeScreen(await repo.getUser(uid), cfg.proPriceStars, cfg.proDays, cfg.proLimit), true); return ctx.answerCallbackQuery(); }
+    if (data === "subscribe") {
+      if (!cfg.subsEnabled) { await ctx.reply(SUBS_OFF_MSG, HTML()); return ctx.answerCallbackQuery(); }
+      await show(ctx, subscribeScreen(await repo.getUser(uid), cfg.proPriceStars, cfg.proDays, cfg.proLimit), true); return ctx.answerCallbackQuery();
+    }
     if (data === "buy:pro") { await sendProInvoice(ctx); return ctx.answerCallbackQuery(); }
 
     if (data.startsWith("acct:")) {
@@ -216,7 +224,8 @@ await bot.api.setMyCommands([
   { command: "remove", description: "/remove username | stop tracking an account" },
   { command: "accounts", description: "view tracked accounts" },
   { command: "settings", description: "notification settings per account" },
-  { command: "subscribe", description: "upgrade your plan" },
+  // subscribe ẩn khi SUBS_ENABLED != 1 (giai đoạn test)
+  ...(cfg.subsEnabled ? [{ command: "subscribe", description: "upgrade your plan" }] : []),
   { command: "support", description: "/support <message> | report an issue to the team" },
   // ẩn tạm cho tới khi có handler: bulkremove, mute, ca
 ]);

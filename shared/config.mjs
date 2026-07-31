@@ -50,6 +50,8 @@ export const cfg = {
   // profile-poller: tự dò đổi avatar/name/verified qua search (tracker-state Bloom quá chậm).
   profilePoll: process.env.PROFILE_POLL !== "0",
   profilePollMs: Number(process.env.PROFILE_POLL_MS || 120000),   // fallback 2 phút (feed-driven lo real-time)
+  // /subscribe: MẶC ĐỊNH TẮT (giai đoạn test). Đặt SUBS_ENABLED=1 khi mở bán Pro.
+  subsEnabled: process.env.SUBS_ENABLED === "1",
 };
 
 export function assertFE() {
