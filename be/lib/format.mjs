@@ -144,7 +144,10 @@ export function buildMessage(e, { botUser } = {}) {
   const [emoji, verb, sep] = meta;
   const author = e.actor, target = e.target;
   const nPhotos = (e.images || []).length, video = !!e.hasVideo;
-  const pre = (video ? "🎥" : "🖼️".repeat(nPhotos)) + emoji;
+  // Bug 5 (relay_bugs): tweet đã xoá -> d.fxtwitter 404 nên deleted-video KHÔNG dựng được
+  // preview; bỏ 🎥 để giữ bất biến prefix-media ⟺ preview-media-trực-tiếp (ảnh pbs vẫn sống).
+  const mediaPre = video ? (k === "deleted" ? "" : "🎥") : "🖼️".repeat(nPhotos);
+  const pre = mediaPre + emoji;
   const parentLink = target && e.parentId ? `${FX}/${target}/status/${e.parentId}` : null;
   const preHtml = (parentLink && REPLYLIKE.has(k)) ? `<a href="${parentLink}">${pre}</a>` : pre;
 
