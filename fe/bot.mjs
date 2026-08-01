@@ -170,6 +170,18 @@ bot.command("whitelist", async (ctx) => {
   await ctx.reply(`✅ Whitelisted <b>${tg}</b>: limit <b>${limit}</b>${days ? `, ${Number(days)} days` : " (no expiry)"}.`, HTML());
 });
 
+// ---------- /unwhitelist (admin: gỡ whitelist/Pro -> về Free) ----------
+bot.command("unwhitelist", async (ctx) => {
+  if (!isAdmin(ctx.from.id)) return;
+  const tg = Number((ctx.match || "").trim().split(/\s+/)[0]);
+  if (!tg) return ctx.reply("Usage: <b>/unwhitelist &lt;tg_id&gt;</b>", HTML());
+  const u = await repo.getUser(tg);
+  if (!u) return ctx.reply(`⚠️ User <code>${tg}</code> chưa tồn tại.`, HTML());
+  const prev = u.tier || "Free";
+  await repo.setUserPlan(tg, { tier: "Free", accountLimit: cfg.freeLimit, expiresAt: null });
+  await ctx.reply(`✅ <b>${tg}</b>: <b>${esc(prev)}</b> → <b>Free</b> (limit ${cfg.freeLimit}).`, HTML());
+});
+
 // ---------- /admin (chỉ admin thấy — liệt kê lệnh admin + ví dụ) ----------
 bot.command("admin", async (ctx) => {
   if (!isAdmin(ctx.from.id)) return;                 // user khác: im lặng (không lộ)
@@ -179,9 +191,12 @@ bot.command("admin", async (ctx) => {
     `Cấp Pro (limit ${cfg.proLimit}, mặc định ${cfg.proDays} ngày).\n` +
     `<i>vd</i> <code>/grant 1034016594 30</code>\n\n` +
     `<b>/whitelist</b> <code>&lt;tg_id&gt; &lt;limit&gt; [days]</code>\n` +
-    `Nâng hạn mức tuỳ chỉnh. Không có days = vô thời hạn. limit <b>0</b> = hạ về Free.\n` +
+    `Nâng hạn mức tuỳ chỉnh. Không có days = vô thời hạn.\n` +
     `<i>vd</i> <code>/whitelist 1034016594 100</code>\n` +
     `<i>vd</i> <code>/whitelist 1034016594 200 90</code>\n\n` +
+    `<b>/unwhitelist</b> <code>&lt;tg_id&gt;</code>\n` +
+    `Gỡ whitelist/Pro → về Free.\n` +
+    `<i>vd</i> <code>/unwhitelist 1034016594</code>\n\n` +
     `<b>/admin</b> — menu này.\n\n` +
     `<b>Tiers:</b> Free (${cfg.freeLimit}) · Pro (${cfg.proLimit}) · Whitelist (tuỳ admin)\n` +
     `💡 Lấy <code>tg_id</code> từ report <b>/support</b> hoặc collection <code>user_stats</code>.`;
@@ -269,6 +284,7 @@ const adminCommands = [
   { command: "admin", description: "admin help — all admin commands" },
   { command: "grant", description: "/grant <tg_id> [days] | grant Pro" },
   { command: "whitelist", description: "/whitelist <tg_id> <limit> [days] | custom limit" },
+  { command: "unwhitelist", description: "/unwhitelist <tg_id> | back to Free" },
 ];
 for (const id of cfg.adminIds)
   await bot.api.setMyCommands([...userCommands, ...adminCommands], { scope: { type: "chat", chat_id: id } }).catch((e) => console.warn("[admin menu]", id, e.message));
