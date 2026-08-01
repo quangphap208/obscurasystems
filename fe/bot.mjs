@@ -144,7 +144,7 @@ bot.on("message:successful_payment", async (ctx) => {
   await ctx.reply(`✅ Payment successful! <b>Pro</b> plan for ${cfg.proDays} days, limit <b>${cfg.proLimit}</b> accounts.`, HTML());
 });
 
-// ---------- /grant (admin cấp gói tay để test) ----------
+// ---------- /grant (admin cấp Pro tay để test) ----------
 bot.command("grant", async (ctx) => {
   if (!isAdmin(ctx.from.id)) return;
   const [target, days] = (ctx.match || "").trim().split(/\s+/);
@@ -152,6 +152,22 @@ bot.command("grant", async (ctx) => {
   await repo.ensureUser(tg);
   await repo.setUserPlan(tg, { tier: "Pro", accountLimit: cfg.proLimit, expiresAt: Date.now() + (Number(days) || cfg.proDays) * 86400000 });
   await ctx.reply(`✅ Granted Pro to ${tg} (${Number(days) || cfg.proDays} days).`);
+});
+
+// ---------- /whitelist (admin nâng user lên hạn mức TUỲ CHỈNH; limit 0 = hạ về Free) ----------
+bot.command("whitelist", async (ctx) => {
+  if (!isAdmin(ctx.from.id)) return;
+  const [target, limitStr, days] = (ctx.match || "").trim().split(/\s+/);
+  const tg = Number(target), limit = Number(limitStr);
+  if (!tg || !Number.isFinite(limit)) return ctx.reply("Usage: <b>/whitelist &lt;tg_id&gt; &lt;limit&gt; [days]</b>\nlimit 0 = hạ về Free", HTML());
+  await repo.ensureUser(tg);
+  if (limit <= 0) {
+    await repo.setUserPlan(tg, { tier: "Free", accountLimit: cfg.freeLimit, expiresAt: null });
+    return ctx.reply(`✅ <b>${tg}</b> về <b>Free</b> (limit ${cfg.freeLimit}).`, HTML());
+  }
+  const expiresAt = days ? Date.now() + Number(days) * 86400000 : null;
+  await repo.setUserPlan(tg, { tier: "Whitelist", accountLimit: limit, expiresAt });
+  await ctx.reply(`✅ Whitelisted <b>${tg}</b>: limit <b>${limit}</b>${days ? `, ${Number(days)} days` : " (no expiry)"}.`, HTML());
 });
 
 // ---------- callback router ----------

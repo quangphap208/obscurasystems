@@ -41,11 +41,11 @@ export async function ensureUser(tgId, username, referredBy = null) {
   return getUser(tgId);
 }
 
-export async function setUserPlan(tgId, { tier, accountLimit, expiresAt }) {
+export async function setUserPlan(tgId, { tier, accountLimit, expiresAt } = {}) {
   const set = {};
   if (tier != null) set.tier = tier;
   if (accountLimit != null) set.account_limit = accountLimit;
-  if (expiresAt != null) set.expires_at = expiresAt;
+  if (expiresAt !== undefined) set.expires_at = expiresAt;   // null = xoá hạn (Whitelist/Free), số = đặt hạn
   if (Object.keys(set).length) await col("users").updateOne({ _id: Number(tgId) }, { $set: set });
   return getUser(tgId);
 }

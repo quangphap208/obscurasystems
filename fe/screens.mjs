@@ -5,13 +5,12 @@ import { SETTINGS, OCR, byKey, label } from "../shared/settings.mjs";
 
 const BOT_NAME = "Obscura Systems";
 
-// Free = gói nền, KHÔNG có hạn (expires_at=null) -> "Never". Chỉ tier trả phí đã qua hạn mới EXPIRED.
-const isFreeTier = (u) => !u?.tier || u.tier === "Free";
-const isPlanExpired = (u) => !isFreeTier(u) && (!u?.expires_at || u.expires_at < Date.now());
+// Hết hạn CHỈ khi có expires_at và đã qua. Free & Whitelist (admin không đặt hạn) -> "Never";
+// Pro (và Whitelist có hạn) -> ngày, hoặc EXPIRED nếu qua.
+const isPlanExpired = (u) => !!u?.expires_at && u.expires_at < Date.now();
 const fmtExp = (u) => {
-  if (isFreeTier(u)) return "Never";
-  if (isPlanExpired(u)) return "EXPIRED";
-  return new Date(u.expires_at).toISOString().slice(0, 10);
+  if (!u?.expires_at) return "Never";
+  return isPlanExpired(u) ? "EXPIRED" : new Date(u.expires_at).toISOString().slice(0, 10);
 };
 
 // #1 Welcome
