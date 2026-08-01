@@ -170,6 +170,24 @@ bot.command("whitelist", async (ctx) => {
   await ctx.reply(`✅ Whitelisted <b>${tg}</b>: limit <b>${limit}</b>${days ? `, ${Number(days)} days` : " (no expiry)"}.`, HTML());
 });
 
+// ---------- /admin (chỉ admin thấy — liệt kê lệnh admin + ví dụ) ----------
+bot.command("admin", async (ctx) => {
+  if (!isAdmin(ctx.from.id)) return;                 // user khác: im lặng (không lộ)
+  const t =
+    `🔐 <b>Admin commands</b>\n\n` +
+    `<b>/grant</b> <code>&lt;tg_id&gt; [days]</code>\n` +
+    `Cấp Pro (limit ${cfg.proLimit}, mặc định ${cfg.proDays} ngày).\n` +
+    `<i>vd</i> <code>/grant 1034016594 30</code>\n\n` +
+    `<b>/whitelist</b> <code>&lt;tg_id&gt; &lt;limit&gt; [days]</code>\n` +
+    `Nâng hạn mức tuỳ chỉnh. Không có days = vô thời hạn. limit <b>0</b> = hạ về Free.\n` +
+    `<i>vd</i> <code>/whitelist 1034016594 100</code>\n` +
+    `<i>vd</i> <code>/whitelist 1034016594 200 90</code>\n\n` +
+    `<b>/admin</b> — menu này.\n\n` +
+    `<b>Tiers:</b> Free (${cfg.freeLimit}) · Pro (${cfg.proLimit}) · Whitelist (tuỳ admin)\n` +
+    `💡 Lấy <code>tg_id</code> từ report <b>/support</b> hoặc collection <code>user_stats</code>.`;
+  await ctx.reply(t, HTML());
+});
+
 // ---------- callback router ----------
 bot.on("callback_query:data", async (ctx) => {
   const data = ctx.callbackQuery.data;
@@ -234,17 +252,26 @@ bot.catch((err) => console.error("[bot error]", err.error?.message || err.messag
 
 const me = await bot.api.getMe();
 BOT_USER = me.username;
-await bot.api.setMyCommands([
+// Menu chung (mọi user). subscribe ẩn khi SUBS_ENABLED != 1 (giai đoạn test).
+const userCommands = [
   { command: "start", description: "main menu" },
   { command: "add", description: "/add username or link | track a new X account" },
   { command: "remove", description: "/remove username | stop tracking an account" },
   { command: "accounts", description: "view tracked accounts" },
   { command: "settings", description: "notification settings per account" },
-  // subscribe ẩn khi SUBS_ENABLED != 1 (giai đoạn test)
   ...(cfg.subsEnabled ? [{ command: "subscribe", description: "upgrade your plan" }] : []),
   { command: "support", description: "/support <message> | report an issue to the team" },
   // ẩn tạm cho tới khi có handler: bulkremove, mute, ca
-]);
+];
+await bot.api.setMyCommands(userCommands);
+// Lệnh admin — CHỈ hiện trong menu của admin (scope theo chat), user khác không thấy.
+const adminCommands = [
+  { command: "admin", description: "admin help — all admin commands" },
+  { command: "grant", description: "/grant <tg_id> [days] | grant Pro" },
+  { command: "whitelist", description: "/whitelist <tg_id> <limit> [days] | custom limit" },
+];
+for (const id of cfg.adminIds)
+  await bot.api.setMyCommands([...userCommands, ...adminCommands], { scope: { type: "chat", chat_id: id } }).catch((e) => console.warn("[admin menu]", id, e.message));
 console.log(`FE bot @${BOT_USER} running.`);
 
 process.once("SIGINT", async () => { await bot.stop(); await close(); process.exit(0); });
