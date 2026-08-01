@@ -196,6 +196,9 @@ export async function refreshUserStats() {
     if (!byUser.has(w.tg_id)) byUser.set(w.tg_id, []);
     byUser.get(w.tg_id).push(w.handle);
   }
+  // Gồm cả user ĐÃ NÂNG TIER (Pro/Whitelist) dù chưa add account nào — để admin thấy tier change.
+  const elevated = await col("users").find({ tier: { $nin: [null, "Free"] } }).project({ _id: 1 }).toArray();
+  for (const e of elevated) if (!byUser.has(e._id)) byUser.set(e._id, []);
   const ids = [...byUser.keys()];
   const users = ids.length ? await col("users").find({ _id: { $in: ids } }).toArray() : [];
   const uMap = new Map(users.map((u) => [u._id, u]));
