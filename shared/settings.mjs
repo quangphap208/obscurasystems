@@ -27,6 +27,8 @@ export const SETTINGS = [
   { key: "pins",             col: "pins",              group: "new", def: 0, gate: "coming", hidden: true },   // Bloom không phát event pin
   { key: "unpins",           col: "unpins",            group: "new", def: 0, gate: "coming", hidden: true },
   { key: "affiliations",     col: "affiliations",      group: "new", def: 0, gate: null },
+  // Hiển thị: bật/tắt nút inline 🗑 Delete trên mỗi tin noti (KHÔNG map event -> không lọc loại tin).
+  { key: "deleteButton",     col: "delete_button",     group: "new", def: 1, gate: null },
   // ---- Custom Notifications (4) — hậu tố callback _cn ----
   { key: "trendingTweets",   col: "trending_tweets",   group: "cn",  def: 0, gate: "coming", hidden: true },  // cần hạ tầng riêng
   { key: "trendingProfiles", col: "trending_profiles", group: "cn",  def: 0, gate: "coming", hidden: true },

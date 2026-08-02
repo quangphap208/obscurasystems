@@ -53,7 +53,7 @@ export function makeDispatcher({ tg, getBotUser, warmupUntil = 0 }) {
         if (!settings[colKey]) continue;                // user tắt loại này
         if (!(await repo.markDelivered(key, tgId))) continue; // đã gửi cho user này
         const ev = applyMediaFilter(e, settings);
-        const msg = buildMessage(ev, { botUser });
+        const msg = buildMessage(ev, { botUser, deleteButton: !!settings.delete_button });
         if (!msg) continue;
         tg.send(tgId, msg, { priority: e.kind === "deleted" });   // delete chen lên đầu hàng đợi
         sent++;

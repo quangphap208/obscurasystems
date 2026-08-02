@@ -143,7 +143,8 @@ function profileCard(u) {
 }
 
 // Dựng { text(HTML), link_preview_options, reply_markup } cho Bot API.
-export function buildMessage(e, { botUser } = {}) {
+// deleteButton: hiện nút 🗑 Delete (setting delete_button; mặc định bật).
+export function buildMessage(e, { botUser, deleteButton = true } = {}) {
   const k = e.kind;
   const meta = ACT[k]; if (!meta) return null;
   const [emoji, verb, sep] = meta;
@@ -197,15 +198,16 @@ export function buildMessage(e, { botUser } = {}) {
   const rows = [];
   const del = { text: "🗑 Delete", callback_data: "del" };
   if (k === "followed" || k === "unfollowed") {
-    rows.push([del]);
+    if (deleteButton) rows.push([del]);
     if (target) rows.push([{ text: "View Followed Account", url: `https://x.com/${target}/` }]);
     if (target && botUser) rows.push([{ text: `QA: ${target}`, url: `https://t.me/${botUser}?start=qa+${target}` }]);
   } else {
-    const row = [del];
+    const row = [];
+    if (deleteButton) row.push(del);
     if (e.tweetId && author) row.push({ text: "View Tweet", url: `https://x.com/${author}/status/${e.tweetId}` });
-    rows.push(row);
+    if (row.length) rows.push(row);
   }
-  return { text, link_preview_options: lpo, reply_markup: { inline_keyboard: rows } };
+  return { text, link_preview_options: lpo, reply_markup: rows.length ? { inline_keyboard: rows } : undefined };
 }
 
 export { ACT, esc };
