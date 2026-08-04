@@ -55,12 +55,18 @@ function platformGroups(platform, globalList) {
   return [{ group: null, handles: globalList || [] }];
 }
 
+// Danh sách handle ĐANG hiển thị ở picker (IG = curated, Truth = full) — cho Select/Clear All.
+export function platformDisplayList(platform, globalList) {
+  return platformGroups(platform, globalList).flatMap((g) => g.handles);
+}
+
 export function platformScreen(platform, enabled, globalList, followed) {
   const m = PLAT_META[platform] || { emoji: "❓", name: platform };
-  const kb = new InlineKeyboard();
-  kb.text(`${enabled ? "✅" : "❌"} Enable ${m.name}`, `plat:en:${platform}`).row();
   const groups = platformGroups(platform, globalList);
   const total = groups.reduce((n, g) => n + g.handles.length, 0);
+  const kb = new InlineKeyboard();
+  kb.text(`${enabled ? "✅" : "❌"} Enable ${m.name}`, `plat:en:${platform}`).row();
+  if (enabled && total) kb.text("☑️ Select All", `plat:all:${platform}`).text("🧹 Clear All", `plat:none:${platform}`).row();
   let text = `${m.emoji} <b>${m.name}</b>\n\n`;
   if (!enabled) {
     text += `Turn on <b>Enable ${m.name}</b> to receive posts from the accounts you follow below.\n\n` +

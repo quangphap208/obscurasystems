@@ -8,7 +8,7 @@ import { byKey, GATE_TEXT } from "../shared/settings.mjs";
 import { resolveHandle, parseHandle } from "./xsearch.mjs";
 import {
   welcomeScreen, referralScreen, globalSettingsScreen, accountSettingsScreen,
-  accountsScreen, subscribeScreen, platformScreen, esc,
+  accountsScreen, subscribeScreen, platformScreen, platformDisplayList, esc,
 } from "./screens.mjs";
 
 const PLATFORMS = new Set(["truth", "ig"]);
@@ -258,6 +258,21 @@ bot.on("callback_query:data", async (ctx) => {
         await repo.setGlobalSetting(uid, p, cur ? 0 : 1);
         await showPlatform(ctx, p, true);
         return ctx.answerCallbackQuery(cur ? "Disabled" : "Enabled");
+      }
+      return ctx.answerCallbackQuery();
+    }
+    if (data.startsWith("plat:all:") || data.startsWith("plat:none:")) {   // Select All / Clear All
+      const selectAll = data.startsWith("plat:all:");
+      const p = data.slice(selectAll ? 9 : 10);
+      if (PLATFORMS.has(p)) {
+        const pl = await repo.getJ7Platforms();
+        const list = platformDisplayList(p, (p === "truth" ? pl?.truth : pl?.ig) || []);
+        for (const h of list) {
+          if (selectAll) await repo.addPlatformWatch(uid, h, p);
+          else await repo.removePlatformWatch(uid, h, p);
+        }
+        await showPlatform(ctx, p, true);
+        return ctx.answerCallbackQuery(selectAll ? `Followed all (${list.length})` : "Cleared all");
       }
       return ctx.answerCallbackQuery();
     }
