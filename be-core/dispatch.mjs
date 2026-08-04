@@ -11,6 +11,13 @@ import { rememberTweet, enrichDelete } from "./tweet-cache.mjs";
 // Field profile mà j7 SỞ HỮU (map từ 6 field j7). verified_badge/handle KHÔNG ở đây -> Bloom vẫn giữ.
 const J7_PROFILE_FIELDS = new Set(["screenname", "bio", "geo", "profile_picture", "banner_picture", "url"]);
 
+// Quality-gate cho tweet j7: event `tweet` đầu của j7 đôi khi là SNAPSHOT CHƯA ĐỦ — X cắt text dài/note
+// tweet rồi chèn self-link `i/web/status/<id>`, video tới sau qua `tweet_update` (cả build-bot lẫn j7-kol
+// đều drop). Không field nào chứa bản đầy đủ. -> Nếu j7 bị cắt VÀ Bloom đang track handle: BỎ bản j7,
+// nhường Bloom (đầy đủ). j7 vẫn thắng (first-send) khi data sạch. Bloom không cover -> vẫn nhận bản j7.
+const J7_TWEET_KINDS = new Set(["tweet", "retweet", "quote", "reply"]);
+const J7_TRUNCATED = /(?:x|twitter)\.com\/i\/web\/status\//i;
+
 // Cache j7-coverage refresh 60s. CHỈ tin `main` (main-feed): response j7 trả main TƯƠI mỗi lần nên
 // account bị j7 drop -> rớt khỏi main ngay -> gate nhả -> Bloom bù. KHÔNG dùng `pool`: pool gồm
 // this.added mà response KHÔNG trả `custom.accounts` -> không phát hiện được pool-account bị drop ->
@@ -58,6 +65,11 @@ export function makeDispatcher({ tg, getBotUser, warmupUntil = 0 }) {
       // Source-preference: profile (6 field j7 sở hữu) -> j7 làm chủ. Account được j7 cover thì BỎ
       // profileChanges của Bloom/poller (giữ verified_badge/handle = field j7 không thấy). j7 tắt -> rỗng.
       if (e.source !== "j7" && e.kind === "profileChanges" && J7_PROFILE_FIELDS.has(e.field) && await isJ7Covered(handle)) return;
+      // j7 tweet bị X cắt (self-link i/web/status) -> nhường Bloom nếu Bloom track handle (bản đầy đủ).
+      if (e.source === "j7" && J7_TWEET_KINDS.has(e.kind) && J7_TRUNCATED.test(e.content || "")) {
+        const tr = await repo.getTracked(handle);
+        if (tr && tr.bloom_account_id != null) { console.log(`[j7-gate] bỏ tweet cắt @${handle} -> nhường Bloom`); return; }
+      }
       if (Date.now() < warmupUntil) return;            // nuốt backlog lúc mới connect
 
       // platform (Truth/IG): colKey = platform (settings.truth/ig), watcher lọc theo platform-watch.
