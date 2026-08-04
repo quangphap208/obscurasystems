@@ -35,14 +35,14 @@ function normTweet(raw) {
             : raw.isQuote   || type === "QUOTE"   ? "quote"
             : raw.isReply   || type === "REPLY"   ? "reply"
             : "tweet";
-  // retweet: tweet GỐC ở object/field riêng. raw.text của RT bị X cắt ("RT @x: …" ~preview) -> phải
-  // lấy text + media từ tweet gốc để render đầy đủ NHƯ Bloom (parent_tweet). Thử nhiều field khả dĩ
-  // (originalTweetText là field j7 dùng cho retweet Truth/IG -> nhiều khả năng X cũng có).
-  const orig = raw.originalTweet || raw.retweetedStatus || null;
+  // retweet: raw.text đôi khi là bản CẮT (j7/X gửi preview ~180 ký tự + "…"). Text+media ĐẦY ĐỦ nằm ở
+  // tweet GỐC -> ưu tiên tweet gốc, raw.text chỉ là fallback. j7 để tweet gốc của retweet ở quotedTweet
+  // (reference cũng đọc quotedTweet.text) hoặc originalTweetText (như retweet Truth/IG) / originalMedia.
+  const rtOrig = raw.quotedTweet || null;
   let images = urls(raw.media && raw.media.images);
   let videos = urls(raw.media && raw.media.videos);
   if (sub === "retweet" && !images.length && !videos.length) {
-    const om = raw.originalMedia || orig?.media || null;
+    const om = raw.originalMedia || rtOrig?.media || null;
     if (om) { images = urls(om.images); videos = urls(om.videos); }
   }
   // j7: replyTo/quotedTweet là object PHẲNG {id,handle,...}; originalAuthor có .handle. Đọc cả 2 dạng.
@@ -50,9 +50,9 @@ function normTweet(raw) {
   if (sub === "reply")        { target = raw.replyTo?.handle     || raw.replyTo?.author?.handle     || null; parentId = raw.replyTo?.id || null; }
   else if (sub === "quote")   { target = raw.quotedTweet?.handle || raw.quotedTweet?.author?.handle || null; parentId = raw.quotedTweet?.id || null; }
   else if (sub === "retweet") { target = raw.originalAuthor?.handle || raw.originalAuthor?.author?.handle || null; parentId = raw.id || null; }
-  // retweet: ƯU TIÊN text tweet gốc (đầy đủ) hơn raw.text (bản cắt). Rỗng hết -> raw.text (không tệ hơn cũ).
-  const origText = raw.originalTweetText || orig?.text || raw.originalText || "";
-  const content = sub === "retweet" ? (origText || raw.text || "") : (raw.text || "");
+  // retweet: ƯU TIÊN text tweet GỐC (đầy đủ) hơn raw.text (bản cắt). Rỗng hết -> raw.text (= reference cũ).
+  const rtText = rtOrig?.text || raw.originalTweetText || "";
+  const content = sub === "retweet" ? (rtText || raw.text || "") : (raw.text || "");
   return {
     kind: sub,
     authorId: a.id ? String(a.id) : null,
