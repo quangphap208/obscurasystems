@@ -14,8 +14,8 @@ const ACT = {
   retweet:        ["🔄", "Retweeted", "\n\n"],
   reply:          ["🖇️", "Replied To", "\n\n"],
   quote:          ["💬", "Quoted", "\n\n"],
-  pinned:         ["📌", "Pinned Reply To", "\n\n"],
-  unpinned:       ["❌📌", "unPinned Reply To", "\n\n"],
+  pinned:         ["📌", "Pinned", "\n\n"],
+  unpinned:       ["❌📌", "unPinned", "\n\n"],
   deleted:        ["🚨🗑️", "Deleted", "\n"],
   followed:       ["🦶", "followed", "\n"],
   unfollowed:     ["❌🦶", "Unfollowed", "\n"],
@@ -61,14 +61,19 @@ export function buildMessage(e, { botUser, deleteButton = true } = {}) {
   // preview; bỏ 🎥 để giữ bất biến prefix-media ⟺ preview-media-trực-tiếp (ảnh pbs vẫn sống).
   const mediaPre = video ? (k === "deleted" ? "" : "🎥") : "🖼️".repeat(nPhotos);
   const pre = mediaPre + emoji;
-  const parentLink = target && e.parentId ? `${FX}/${target}/status/${e.parentId}` : null;
-  const preHtml = (parentLink && REPLYLIKE.has(k)) ? `<a href="${parentLink}">${pre}</a>` : pre;
+  // link thread cho REPLYLIKE: reply/quote -> tweet cha; pinned/unpinned -> chính tweet đã pin.
+  let threadUrl = null;
+  if ((k === "reply" || k === "quote") && target && e.parentId) threadUrl = `${FX}/${target}/status/${e.parentId}`;
+  else if ((k === "pinned" || k === "unpinned") && author && e.tweetId) threadUrl = `${FX}/${author}/status/${e.tweetId}`;
+  const preHtml = (threadUrl && REPLYLIKE.has(k)) ? `<a href="${threadUrl}">${pre}</a>` : pre;
 
   let head;
   if (k === "tweet") head = `${preHtml} <b>${esc(author)}</b> ${verb}`;
   else if (k === "retweet") head = `${preHtml} <b>${esc(author)}</b> <code>${verb}</code> <b>${esc(target)}</b>`;
   else if (k === "reply") head = `${preHtml} <b>${esc(author)}</b> <code>${verb}</code> <b>${esc(target)}</b>`;
-  else if (k === "pinned" || k === "unpinned") head = `${preHtml} <b>${esc(author)}</b> <b>${verb}</b> <b>${esc(target)}</b>`;
+  else if (k === "pinned" || k === "unpinned") head = (e.pinnedIsReply && target)
+    ? `${preHtml} <b>${esc(author)}</b> <b>${verb} Reply To</b> <b>${esc(target)}</b>`
+    : `${preHtml} <b>${esc(author)}</b> <b>${verb}</b>`;
   else if (k === "quote") head = `${preHtml} <a href="https://x.com/${author}">${esc(author)}</a> <b>${verb}</b> <a href="https://x.com/${target}">${esc(target)}</a>`;
   else if (k === "deleted") head = `${preHtml} <b>Deleted ${e.deletedIsRetweet ? "Retweet" : "Tweet"}</b> from <b>${esc(author)}</b>`;
   else if (k === "followed" || k === "unfollowed") head = `${preHtml} <a href="https://x.com/${author}"><b>${esc(author)}</b></a> ${verb} <a href="https://x.com/${target}"><b>${esc(target)}</b></a>`;
@@ -97,7 +102,7 @@ export function buildMessage(e, { botUser, deleteButton = true } = {}) {
     lpo = { url: e.images[0], show_above_text: true, prefer_large_media: true };
   } else if (video && e.tweetId) lpo = { url: `${DFX}/${author}/status/${e.tweetId}`, show_above_text: true, prefer_large_media: true };
   else if (nPhotos && e.images[0]) lpo = { url: e.images[0], show_above_text: true, prefer_large_media: true };
-  else if (parentLink && REPLYLIKE.has(k)) lpo = { url: parentLink, show_above_text: false, prefer_large_media: true };
+  else if (threadUrl && REPLYLIKE.has(k)) lpo = { url: threadUrl, show_above_text: false, prefer_large_media: true };
   else lpo = { is_disabled: true };
 
   // nút inline. Noti gửi DM sẵn nên không cần nút mở-bot; thay bằng 🗑 Delete để user

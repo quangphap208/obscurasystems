@@ -30,8 +30,9 @@ const dispatch = makeDispatcher({ tg, getBotUser: () => botUser, warmupUntil: Da
 
 function onEvent(raw, kind) {
   try {
-    const e = normalizeJ7(raw, kind);
-    if (e) dispatch(e);
+    const out = normalizeJ7(raw, kind);
+    if (!out) return;                                  // profile trả MẢNG (1 event / field); còn lại 1 event
+    for (const e of (Array.isArray(out) ? out : [out])) { e.source = "j7"; dispatch(e); }
   } catch (err) { console.warn("[j7 normalize]", err.message); }
 }
 

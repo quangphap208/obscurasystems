@@ -8,13 +8,16 @@
 //   • profile / affiliation  -> đợi M4 (source-preference: j7 làm chủ, cần isJ7Covered + canon field)
 //   • external (Truth/IG) / update(edit) -> ngoài phạm vi X-tracker dual-source.
 
+import { makeProfileEvent } from "../be-core/message.mjs";
+
 const urls = (arr) => (arr || []).map((m) => (typeof m === "string" ? m : m && m.url)).filter(Boolean);
 
 // entry: map kind (từ j7feed.onEvent) -> canonical event | null
 export function normalizeJ7(raw, kind) {
   if (!raw || typeof raw !== "object") return null;
   if (kind === "update" || kind === "external") return null;        // edit / multi-platform: bỏ
-  if (kind === "profile" || kind === "affiliation") return null;    // đợi M4 (j7-boss + canon field)
+  if (kind === "affiliation") return null;                          // affiliation vẫn để Bloom lo (không double-fire)
+  if (kind === "profile") return normProfile(raw);                  // -> MẢNG profileChanges (j7 làm chủ)
   if (kind === "deleted") return normDelete(raw);
   if (kind === "followed" || kind === "unfollowed") return normFollow(raw, kind);
   if (kind === "pinned" || kind === "unpinned") return normPin(raw, kind);
@@ -115,6 +118,31 @@ function normLifecycle(raw, kind) {
   const actor = u.handle || null;
   if (!actor) return null;
   return { kind, undo: false, authorId: u.id ? String(u.id) : null, actor, content: "", images: [], hasVideo: false };
+}
+
+// profile_update -> MẢNG profileChanges (1 event / field đổi), map j7 field -> vocab canonical (Bloom)
+// để dedupKey khớp + render giống. 6 field j7 sở hữu; verified_badge/@handle Bloom lo (j7 không thấy).
+function normProfile(raw) {
+  const u = raw.user || {};
+  const p = u.profile || {};
+  const b = raw.before?.profile || {};
+  const actor = u.handle || null;
+  if (!actor) return null;
+  const xid = u.id ? String(u.id) : null;
+  const bioNow = typeof p.description === "string" ? p.description : (p.description?.text || "");
+  const bioOld = typeof b.description === "string" ? b.description : (b.description?.text || "");
+  const out = [];
+  const add = (field, ov, nv) => {
+    if ((ov ?? null) === (nv ?? null)) return;
+    out.push(makeProfileEvent(field, ov ?? null, nv ?? null, { authorId: xid, actor }));
+  };
+  add("screenname", b.name, p.name);            // display name
+  add("bio", bioOld, bioNow);
+  add("geo", b.location, p.location);           // location -> geo (vocab Bloom)
+  add("profile_picture", b.avatar, p.avatar);   // avatar (makeProfileEvent tự set images)
+  add("banner_picture", b.banner, p.banner);    // banner
+  add("url", b.url?.url, p.url?.url);            // website -> url
+  return out.length ? out : null;
 }
 
 // Profile card (blockquote) cho follow — dựng theo ĐÚNG format Bloom (send_like_source.md §6) để

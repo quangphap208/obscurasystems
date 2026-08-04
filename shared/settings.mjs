@@ -7,8 +7,8 @@
 // def   = giá trị mặc định (spec §3, trạng thái thật account Free)
 // gate  = null | 'coming' (chưa hỗ trợ) | 'paid' (chỉ trả phí) — dùng cho FE chặn toggle
 //
-// gate được quyết định theo NGUỒN Bloom (xem features.mjs): 5 khoá Bloom không phát
-// (pins/unpins/spaces/trendingTweets/trendingProfiles) + muted (chỉ cục bộ) bị gate.
+// gate theo NGUỒN: pins/unpins nay do j7 cấp (nguồn 2) -> đã bỏ gate. Còn lại Bloom lẫn j7 đều
+// không phát (spaces/trendingTweets/trendingProfiles) + muted (chỉ cục bộ) vẫn bị gate.
 
 export const SETTINGS = [
   // ---- New Accounts (15) — đúng thứ tự hiển thị ----
@@ -24,8 +24,8 @@ export const SETTINGS = [
   { key: "photos",           col: "photos",            group: "new", def: 1, gate: null },
   { key: "videos",           col: "videos",            group: "new", def: 0, gate: null },
   { key: "unfollows",        col: "unfollows",         group: "new", def: 0, gate: null },
-  { key: "pins",             col: "pins",              group: "new", def: 0, gate: "coming", hidden: true },   // Bloom không phát event pin
-  { key: "unpins",           col: "unpins",            group: "new", def: 0, gate: "coming", hidden: true },
+  { key: "pins",             col: "pins",              group: "new", def: 0, gate: null },   // j7 phát event pin (Bloom không) — chỉ bắn cho account j7 cover
+  { key: "unpins",           col: "unpins",            group: "new", def: 0, gate: null },
   { key: "affiliations",     col: "affiliations",      group: "new", def: 0, gate: null },
   // Hiển thị: bật/tắt nút inline 🗑 Delete trên mỗi tin noti (KHÔNG map event -> không lọc loại tin).
   { key: "deleteButton",     col: "delete_button",     group: "new", def: 1, gate: null },
@@ -60,6 +60,8 @@ export const KIND_TO_COL = {
   deleted:        "deleted_tweets",
   followed:       "follows",
   unfollowed:     "unfollows",
+  pinned:         "pins",
+  unpinned:       "unpins",
   profileChanges: "profile_changes",
   affiliation:    "affiliations",
   suspended:      "suspensions",

@@ -245,12 +245,16 @@ export async function getCachedTweet(tweetId) {
 }
 
 // ---------- deliveries (dedup per user; TTL index tự prune) ----------
-export async function markDelivered(dedupKey, tgId) {
+// source (bloom|j7): trọng tài race + metric "nguồn nào tới trước thắng". Insert unique _id -> nguồn
+// thứ 2 (cùng dedupKey) dính 11000 => false => không gửi trùng. Đo win-rate: nhóm deliveries theo source.
+export async function markDelivered(dedupKey, tgId, source = null) {
   try {
-    await col("deliveries").insertOne({ _id: `${dedupKey}:${tgId}`, dedup_key: dedupKey, tg_id: Number(tgId), sent_at: new Date() });
+    const doc = { _id: `${dedupKey}:${tgId}`, dedup_key: dedupKey, tg_id: Number(tgId), sent_at: new Date() };
+    if (source) doc.source = source;
+    await col("deliveries").insertOne(doc);
     return true;
   } catch (e) {
-    if (e.code === 11000) return false;   // đã gửi cho user này
+    if (e.code === 11000) return false;   // đã gửi cho user này (hoặc nguồn kia thắng)
     throw e;
   }
 }

@@ -16,6 +16,8 @@ const tg = new Telegram(cfg.botToken);
 let botUser = null;
 const warmupUntil = Date.now() + cfg.warmupMs;
 const dispatch = makeDispatcher({ tg, getBotUser: () => botUser, warmupUntil });
+// Tag nguồn=bloom cho mọi event Bloom (gate source-preference profile + metric race ở dispatch).
+const dispatchBloom = (e) => { if (e) e.source = "bloom"; return dispatch(e); };
 
 async function main() {
   await connect();
@@ -33,7 +35,7 @@ async function main() {
   let poller = null;   // gán bên dưới; onFrame tham chiếu qua closure (chạy sau khi đã gán).
   const pool = new BloomPool({
     headless: cfg.headless,
-    onFrame: (frame) => { poller?.observeFrame(frame); dispatch(normalize(frame)); },
+    onFrame: (frame) => { poller?.observeFrame(frame); dispatchBloom(normalize(frame)); },
     onExpired: async (acc) => {
       await repo.setBloomStatus(acc.id, "expired");
       for (const id of cfg.adminIds) tg.notify(id, `⚠️ <b>Shard #${acc.id}</b> (${acc.label || "source"}) session expired. Update the token and restart the engine.`);
@@ -49,7 +51,7 @@ async function main() {
 
   // profile-poller: feed-driven (real-time cho account có tweet) + poll fallback cho account im lặng.
   if (cfg.profilePoll) {
-    poller = new ProfilePoller({ pool, dispatch, adminIds: cfg.adminIds });
+    poller = new ProfilePoller({ pool, dispatch: dispatchBloom, adminIds: cfg.adminIds });
     poller.start(cfg.profilePollMs);
     console.log(`Profile: feed-driven real-time + poll fallback mỗi ${cfg.profilePollMs / 1000}s (avatar/name/verified).`);
   }
