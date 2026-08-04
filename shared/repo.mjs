@@ -289,6 +289,19 @@ export async function markDelivered(dedupKey, tgId, source = null) {
   }
 }
 
+// ---------- monitor firehose (TEST/QC: race-outcome giữa 2 nguồn) ----------
+// Mark nguồn ĐẦU TIÊN thấy 1 event (theo dedupKey) -> { won, firstSource }. TTL tự prune (monitor_seen.at).
+export async function monitorMark(dedupKey, source) {
+  const _id = `mon:${dedupKey}`;
+  try {
+    await col("monitor_seen").insertOne({ _id, source: source || "?", at: new Date() });
+    return { won: true, firstSource: source || "?" };
+  } catch (e) {
+    if (e.code === 11000) { const d = await col("monitor_seen").findOne({ _id }); return { won: false, firstSource: d?.source || "?" }; }
+    throw e;
+  }
+}
+
 // ---------- tiện ích migrate ----------
 export async function collectionsInfo() {
   const names = ["users", "watches", "referrals", "bloom_accounts", "tracked_handles", "tweet_cache", "deliveries"];

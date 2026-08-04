@@ -54,6 +54,34 @@ MONGODB_DB=obscura_test BOT_TOKEN=<TEST_TOKEN> node scripts/inject_event.mjs pla
 - **KHÔNG** đặt `BOT_TOKEN` prod khi test (sẽ DM user thật + 409 với FE VPS).
 - **KHÔNG** chạy `npm run be` / `be-j7` ở local với session prod (double-dispatch + rủi ro untrack). Nếu cần feed thật ở local: dùng **session Bloom/j7 riêng** + `SOURCE_EXCLUSIVE=0` + DB test.
 
+## Monitor firehose — verify merge 2 BE (Bloom + j7)
+
+1 channel nhận **MỌI event** (bỏ qua settings/watcher) từ **cả 2 BE**, kèm **race-outcome** (nguồn tới trước 🏆, sau `dup ←`). Dùng để soi merge trước khi tin ở prod. **Trống `MONITOR_CHAT` = TẮT** (prod không đụng).
+
+**Chuẩn bị:**
+1. Tạo **channel test** → add **bot test** làm **admin** → **post 1 tin** trong channel.
+2. Lấy chat_id: `BOT_TOKEN=<TEST> node scripts/chat_id.mjs` → copy id channel (số âm, `-100…`).
+
+**Chạy BE local với monitor** (test DB + monitor + KHÔNG untrack prod):
+```bash
+# nhẹ, thử trước: chỉ j7
+MONGODB_DB=obscura_test BOT_TOKEN=<TEST> MONITOR_CHAT=<-100…> \
+  J7_SESSION_TOKEN=<token> SOURCE_EXCLUSIVE=0 npm run be-j7
+
+# đầy đủ merge: thêm Bloom (nặng — cần Chromium/PoW)
+MONGODB_DB=obscura_test BOT_TOKEN=<TEST> MONITOR_CHAT=<-100…> \
+  BLOOM_SESSIONS=<token> SOURCE_EXCLUSIVE=0 npm run be
+```
+
+**Đọc channel:** mỗi dòng `[nguồn · 🏆/dup] kind @handle` + full render. Verify:
+- Cả `[bloom]` lẫn `[j7]` xuất hiện → 2 nguồn chạy.
+- Cùng `tweetId` từ 2 nguồn → so timestamp = latency race; `🏆` vs `dup ←` = dedup đúng.
+- pins/unpins chỉ `[j7]`, verified/edit chỉ `[bloom]`, Truth/IG `[j7]`.
+- Đối chiếu `deliveries.source` (user chỉ nhận 1 lần) ↔ channel (thấy cả 2) → cross-source dedup OK.
+
+> ⚠️ Injector cũng đi qua hook này → `MONITOR_CHAT=<id> node scripts/inject_event.mjs …` bơm cả vào monitor (source=`test`). Dùng để test format nhanh không cần feed thật.
+> ⚠️ `SOURCE_EXCLUSIVE=0` bắt buộc khi dùng session chung prod (chỉ observe+add, KHÔNG untrack). Sạch nhất: session Bloom/j7 riêng cho test.
+
 ## Dọn DB test
 ```bash
 # xoá hẳn DB test khi xong (mongosh) — KHÔNG đụng redacted_clone

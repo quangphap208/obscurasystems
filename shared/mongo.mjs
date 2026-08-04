@@ -34,4 +34,5 @@ async function ensureIndexes(db) {
   // TTL auto-prune: Mongo tự xoá theo trường Date.
   await db.collection("tweet_cache").createIndex({ seen_at: 1 }, { expireAfterSeconds: 3 * 24 * 3600 });
   await db.collection("deliveries").createIndex({ sent_at: 1 }, { expireAfterSeconds: 2 * 24 * 3600 });
+  await db.collection("monitor_seen").createIndex({ at: 1 }, { expireAfterSeconds: 24 * 3600 });   // firehose race-mark
 }

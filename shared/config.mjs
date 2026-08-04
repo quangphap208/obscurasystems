@@ -56,6 +56,9 @@ export const cfg = {
   j7Host: process.env.J7_HOST || "https://nyc.j7tracker.io",   // host socket + /api/session-check
   j7Session: process.env.J7_SESSION_TOKEN || "",               // JWT gốc = localStorage.sessionId trên j7tracker.io
   j7KeepaliveHours: Number(process.env.J7_KEEPALIVE_HOURS || 6), // chu kỳ validate + rotate token
+  // Monitor firehose (TEST/QC): copy MỌI event (cả 2 nguồn) + race-outcome vào 1 channel. Trống = TẮT
+  // (prod không đụng). Đặt = chat_id channel test để soi merge 2 BE ở local. buildMessage FULL render.
+  monitorChat: process.env.MONITOR_CHAT || "",
 };
 
 export function assertFE() {

@@ -2,6 +2,7 @@
 // DÙNG CHUNG cho BE Bloom + BE j7. markDelivered (deliveries) là trọng tài race: nguồn nào gọi
 // trước thắng, nguồn sau bị duplicate key -> tự bỏ (không gửi trùng). dedupKey/render đều dùng chung.
 import * as repo from "../shared/repo.mjs";
+import { cfg } from "../shared/config.mjs";
 import { KIND_TO_COL } from "../shared/settings.mjs";
 import { buildMessage } from "./message.mjs";
 import { dedupKey } from "./events.mjs";
@@ -66,6 +67,19 @@ export function makeDispatcher({ tg, getBotUser, warmupUntil = 0 }) {
 
       const key = dedupKey(e);
       const botUser = getBotUser();
+
+      // MONITOR firehose (TEST/QC): copy MỌI event (bỏ qua settings/watcher) + race-outcome vào channel.
+      // Cả 2 BE gọi -> mỗi nguồn 1 dòng; nguồn tới trước = 🏆, sau = dup←nguồn-thắng. buildMessage FULL.
+      if (cfg.monitorChat) {
+        try {
+          const race = await repo.monitorMark(key, e.source);
+          const tag = race.won ? `🏆 ${e.source || "?"}` : `dup ← ${race.firstSource}`;
+          const head = `<b>[${e.source || "?"} · ${tag}]</b> <code>${e.kind}${e.platform ? ":" + e.platform : ""}</code> @${handle}`;
+          const m = buildMessage(e, { botUser, deleteButton: false });
+          tg.send(cfg.monitorChat, { text: m ? head + "\n" + m.text : head, link_preview_options: m?.link_preview_options, reply_markup: m?.reply_markup });
+        } catch (err) { console.warn("[monitor]", err.message); }
+      }
+
       const watchers = await repo.watchersOfHandle(handle, isPlat ? e.platform : "x");
       let sent = 0;
       for (const { tgId, settings } of watchers) {
