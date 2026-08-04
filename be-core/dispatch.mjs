@@ -65,10 +65,12 @@ export function makeDispatcher({ tg, getBotUser, warmupUntil = 0 }) {
       // Source-preference: profile (6 field j7 sở hữu) -> j7 làm chủ. Account được j7 cover thì BỎ
       // profileChanges của Bloom/poller (giữ verified_badge/handle = field j7 không thấy). j7 tắt -> rỗng.
       if (e.source !== "j7" && e.kind === "profileChanges" && J7_PROFILE_FIELDS.has(e.field) && await isJ7Covered(handle)) return;
-      // j7 tweet bị X cắt (self-link i/web/status) -> nhường Bloom nếu Bloom track handle (bản đầy đủ).
+      // j7 tweet bị X cắt (self-link i/web/status) + Bloom track handle -> GATE: KHÔNG gửi bản j7 (nhường
+      // Bloom bản đầy đủ). Vẫn cho HIỆN monitor (tag ⏸) để QC thấy j7 CÓ nhận, khỏi tưởng "j7 rớt".
+      let gated = false;
       if (e.source === "j7" && J7_TWEET_KINDS.has(e.kind) && J7_TRUNCATED.test(e.content || "")) {
         const tr = await repo.getTracked(handle);
-        if (tr && tr.bloom_account_id != null) { console.log(`[j7-gate] bỏ tweet cắt @${handle} -> nhường Bloom`); return; }
+        if (tr && tr.bloom_account_id != null) { gated = true; console.log(`[j7-gate] tweet cắt @${handle} -> nhường Bloom (không gửi bản j7)`); }
       }
       if (Date.now() < warmupUntil) return;            // nuốt backlog lúc mới connect
 
@@ -89,7 +91,8 @@ export function makeDispatcher({ tg, getBotUser, warmupUntil = 0 }) {
           const race = await repo.monitorMark(key, e.source);
           if (race.firstShow) {                            // bỏ re-emit cùng nguồn (Bloom feed lặp) -> 1 dòng/nguồn/event
             const tag = race.won ? `🏆 ${e.source || "?"}` : `dup ← ${race.firstSource}`;
-            const head = `<b>[${e.source || "?"} · ${tag}]</b> <code>${e.kind}${e.platform ? ":" + e.platform : ""}</code> @${handle}`;
+            const gtag = gated ? " · ⏸cắt→bloom" : "";
+            const head = `<b>[${e.source || "?"} · ${tag}${gtag}]</b> <code>${e.kind}${e.platform ? ":" + e.platform : ""}</code> @${handle}`;
             const m = buildMessage(e, { botUser, deleteButton: false });
             tg.send(cfg.monitorChat, { text: m ? head + "\n" + m.text : head, link_preview_options: m?.link_preview_options, reply_markup: m?.reply_markup });
           }
@@ -98,7 +101,7 @@ export function makeDispatcher({ tg, getBotUser, warmupUntil = 0 }) {
       // MONITOR_ONLY (TEST): chỉ bắn monitor channel, KHÔNG thử DM user. Test DB clone watches user prod
       // nhưng họ chưa /start bot test -> DM trả 400 chat-not-found + ăn rate-limit làm nghẽn monitor.
       // Mặc định TẮT -> prod gửi DM bình thường (flow chung không đổi).
-      if (cfg.monitorOnly) return;
+      if (gated || cfg.monitorOnly) return;   // gated: đã hiện monitor (tag ⏸), KHÔNG gửi DM -> Bloom lo bản đầy đủ
       let sent = 0;
       for (const { tgId, settings } of watchers) {
         if (!settings[colKey]) continue;                // user tắt loại này
