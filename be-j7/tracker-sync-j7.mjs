@@ -18,7 +18,10 @@ export class TrackerSyncJ7 {
     this.busy = false;
   }
 
-  start(intervalMs = 30000) {
+  // interval mặc định 5 phút: get_all_watched_accounts trả ~7800 account, list đổi CHẬM (vài chục/ngày)
+  // -> fetch dày (<1h) tốn kết nối + dễ rate-limit (theo reverse j7-reload). Reconcile vẫn đủ nhạy vì
+  // Bloom cover account mới /add NGAY; j7 chỉ cần vào race trong ~5' (pins/unpins KOL mới trễ tối đa 5').
+  start(intervalMs = 300000) {
     this.feed.on("all_watched_accounts_response", (r) =>
       this.reconcile(r).catch((e) => console.warn("[j7-sync]", e.message)));
     this.tick();
@@ -35,7 +38,10 @@ export class TrackerSyncJ7 {
     try {
       const main = handles(r.x?.accounts);
       const avail = handles(r.custom?.availableAccounts);        // pool CHƯA add (còn available)
-      const added = handles(r.custom?.accounts);                 // pool đã add server-side (nếu response có)
+      // Guard rỗng bất thường (transient / lỗi server): GIỮ j7_list cũ, đừng ghi đè kẻo mất coverage
+      // -> gate isJ7Covered tắt -> Bloom double-fire profile. (best-practice reverse j7-reload.)
+      if (!main.length) { console.warn("[j7-sync] main-feed rỗng — bỏ qua lần này (giữ j7_list cũ)"); return; }
+      const added = handles(r.custom?.accounts);                 // pool đã add server-side (thường response không trả -> [] -> rơi về this.added)
       for (const h of added) this.added.add(h);
 
       const mainSet = new Set(main), availSet = new Set(avail);

@@ -64,8 +64,8 @@ async function main() {
 
   // tracker-sync: add pool account (watched ∩ pool) vào feed + lưu j7_list (cover main ∪ pool).
   const sync = new TrackerSyncJ7({ feed, adminIds: cfg.adminIds });
-  sync.start(30000);
-  console.log("j7 tracker-sync: reconcile watched ∩ j7-list mỗi 30s (add/remove pool).");
+  sync.start(300000);
+  console.log("j7 tracker-sync: reconcile watched ∩ j7-list mỗi 5 phút (add/remove pool + lưu j7_list).");
 
   // keepalive: định kỳ validate token; server rotate (X-New-Token) -> lưu đè + áp reconnect.
   let keepaliveTimer = null;
