@@ -75,10 +75,12 @@ export function makeDispatcher({ tg, getBotUser, warmupUntil = 0 }) {
       if (cfg.monitorChat && watchers.length) {
         try {
           const race = await repo.monitorMark(key, e.source);
-          const tag = race.won ? `🏆 ${e.source || "?"}` : `dup ← ${race.firstSource}`;
-          const head = `<b>[${e.source || "?"} · ${tag}]</b> <code>${e.kind}${e.platform ? ":" + e.platform : ""}</code> @${handle}`;
-          const m = buildMessage(e, { botUser, deleteButton: false });
-          tg.send(cfg.monitorChat, { text: m ? head + "\n" + m.text : head, link_preview_options: m?.link_preview_options, reply_markup: m?.reply_markup });
+          if (race.firstShow) {                            // bỏ re-emit cùng nguồn (Bloom feed lặp) -> 1 dòng/nguồn/event
+            const tag = race.won ? `🏆 ${e.source || "?"}` : `dup ← ${race.firstSource}`;
+            const head = `<b>[${e.source || "?"} · ${tag}]</b> <code>${e.kind}${e.platform ? ":" + e.platform : ""}</code> @${handle}`;
+            const m = buildMessage(e, { botUser, deleteButton: false });
+            tg.send(cfg.monitorChat, { text: m ? head + "\n" + m.text : head, link_preview_options: m?.link_preview_options, reply_markup: m?.reply_markup });
+          }
         } catch (err) { console.warn("[monitor]", err.message); }
       }
       let sent = 0;

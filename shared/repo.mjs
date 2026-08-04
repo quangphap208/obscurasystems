@@ -290,16 +290,22 @@ export async function markDelivered(dedupKey, tgId, source = null) {
 }
 
 // ---------- monitor firehose (TEST/QC: race-outcome giữa 2 nguồn) ----------
-// Mark nguồn ĐẦU TIÊN thấy 1 event (theo dedupKey) -> { won, firstSource }. TTL tự prune (monitor_seen.at).
+// Trả { firstShow, won, firstSource }: firstShow=lần đầu NGUỒN NÀY hiện key (chống re-emit noise);
+// won=nguồn này chạm key TRƯỚC (race winner). TTL tự prune (monitor_seen.at).
 export async function monitorMark(dedupKey, source) {
-  const _id = `mon:${dedupKey}`;
-  try {
-    await col("monitor_seen").insertOne({ _id, source: source || "?", at: new Date() });
-    return { won: true, firstSource: source || "?" };
-  } catch (e) {
-    if (e.code === 11000) { const d = await col("monitor_seen").findOne({ _id }); return { won: false, firstSource: d?.source || "?" }; }
-    throw e;
+  const src = source || "?";
+  // per-source: nguồn này đã hiện key này chưa? (Bloom re-emit cùng tweet -> chỉ in 1 lần)
+  let firstShow = true;
+  try { await col("monitor_seen").insertOne({ _id: `mon:${dedupKey}:${src}`, source: src, at: new Date() }); }
+  catch (e) { if (e.code === 11000) firstShow = false; else throw e; }
+  // overall: nguồn nào chạm key TRƯỚC = race winner
+  let won = true, firstSource = src;
+  try { await col("monitor_seen").insertOne({ _id: `mon:${dedupKey}`, source: src, at: new Date() }); }
+  catch (e) {
+    if (e.code === 11000) { won = false; const d = await col("monitor_seen").findOne({ _id: `mon:${dedupKey}` }); firstSource = d?.source || "?"; }
+    else throw e;
   }
+  return { firstShow, won, firstSource };
 }
 
 // ---------- tiện ích migrate ----------
