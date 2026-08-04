@@ -36,22 +36,45 @@ export function welcomeScreen(user, nWatched, botUser) {
 
 // 🟣📸 Truth/IG picker — master enable + chọn account từ list global (BE capture vào j7_platform).
 const PLAT_META = { truth: { emoji: "🟣", name: "Truth Social" }, ig: { emoji: "📸", name: "Instagram" } };
+
+// TẠM THỜI: IG global ~65 quá nhiều -> chỉ show allowlist này (nhóm theo chủ đề). Bỏ/mở rộng khi cần.
+const IG_CURATED = [
+  { group: "Crypto", handles: ["a16z", "abtc", "binance", "binance.zh", "changpengzhao", "official_bonk_inu", "phantom", "solana"] },
+  { group: "Meme / Animals", handles: ["balltze", "kabosumama", "knowyourmeme", "zoos", "natgeoanimals"] },
+  { group: "AI", handles: ["chatgpt", "claudeai", "googlegemini", "grok", "meta.ai", "openai", "soraofficial"] },
+];
+
+// IG -> allowlist nhóm (lọc theo global nếu đã có data; global rỗng -> show cả allowlist). Truth -> phẳng.
+function platformGroups(platform, globalList) {
+  if (platform === "ig") {
+    const avail = new Set((globalList || []).map((h) => String(h).toLowerCase()));
+    return IG_CURATED
+      .map((g) => ({ group: g.group, handles: avail.size ? g.handles.filter((h) => avail.has(h.toLowerCase())) : g.handles }))
+      .filter((g) => g.handles.length);
+  }
+  return [{ group: null, handles: globalList || [] }];
+}
+
 export function platformScreen(platform, enabled, globalList, followed) {
   const m = PLAT_META[platform] || { emoji: "❓", name: platform };
   const kb = new InlineKeyboard();
   kb.text(`${enabled ? "✅" : "❌"} Enable ${m.name}`, `plat:en:${platform}`).row();
+  const groups = platformGroups(platform, globalList);
+  const total = groups.reduce((n, g) => n + g.handles.length, 0);
   let text = `${m.emoji} <b>${m.name}</b>\n\n`;
   if (!enabled) {
     text += `Turn on <b>Enable ${m.name}</b> to receive posts from the accounts you follow below.\n\n` +
       `<i>Currently OFF — you won't get ${m.name} notifications.</i>`;
-  } else if (!globalList.length) {
+  } else if (!total) {
     text += `No ${m.name} accounts available yet. Check back later.`;
   } else {
-    text += `Tap to follow / unfollow. ✅ = you'll get their ${m.name} posts.\n` +
-      `<b>${followed.size}</b>/${globalList.length} followed.`;
-    for (const h of globalList) {
-      const on = followed.has(String(h).toLowerCase());
-      kb.text(`${on ? "✅" : "➕"} ${h}`, `plat:pk:${platform}:${h}`).row();
+    text += `Tap to follow / unfollow. ✅ = you'll get their ${m.name} posts.\n<b>${followed.size}</b> followed.`;
+    for (const g of groups) {
+      if (g.group) kb.text(`── ${g.group} ──`, "none").row();
+      for (const h of g.handles) {
+        const on = followed.has(String(h).toLowerCase());
+        kb.text(`${on ? "✅" : "➕"} ${h}`, `plat:pk:${platform}:${h}`).row();
+      }
     }
   }
   kb.text("⬅️ Back", "home").text("ⓧ Close", "close");
