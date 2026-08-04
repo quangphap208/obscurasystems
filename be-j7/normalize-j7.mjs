@@ -68,9 +68,11 @@ function normDelete(e) {
   const s = e.tweet || e.deletedTweet || e || {};
   const a = s.author || {};
   const type = String(s.type || "TWEET").toUpperCase();
-  const isRt = type === "RETWEET" || !!s.isRetweet;
-  let images = urls(s.media && s.media.images);
-  let videos = urls(s.media && s.media.videos);
+  const isRt = type === "RETWEET" || !!s.isRetweet || !!s.retweet;
+  // j7 tweet_deleted: nội dung ở s.body.text (KHÔNG phải s.text) + media ở s.media (mảng URL string).
+  const src = s.retweet || s.quoted || s;            // retweet/quote đã xoá: lấy media/text tweet gốc nếu có
+  let images = urls((s.media && s.media.images) || (src.media && src.media.images));
+  let videos = urls((s.media && s.media.videos) || (src.media && src.media.videos));
   if (isRt && !images.length && !videos.length && s.originalMedia) {
     images = urls(s.originalMedia.images); videos = urls(s.originalMedia.videos);
   }
@@ -78,7 +80,8 @@ function normDelete(e) {
   return {
     kind: "deleted", deletedIsRetweet: isRt,
     authorId: (e.author_id || a.id) ? String(e.author_id || a.id) : null,
-    actor: a.handle || null, content: s.text || "",
+    actor: a.handle || null,
+    content: s.body?.text || src.body?.text || s.text || "",   // FIX: text ở body.text (payload thật)
     tweetId: id ? String(id) : null, target: null, parentId: null,
     images, hasVideo: videos.length > 0,
   };
