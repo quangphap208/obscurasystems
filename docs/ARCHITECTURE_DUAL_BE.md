@@ -88,6 +88,7 @@ tin ra **giống hệt** dù nguồn nào thắng.
 | affiliation | **Bloom** | j7 để dành (tránh double-fire) |
 | tweet edit / withheld / protect / geo-scrub | **Bloom** | j7 không có |
 | account ∉ j7-list | **chỉ Bloom** | ngoài main-feed(~1491) + pool(~6346) |
+| **post Truth Social / Instagram** | **j7** (event `external`) | per-user opt-in — xem "Truth/IG" dưới |
 
 ---
 
@@ -128,6 +129,13 @@ Alert admin **gắn nhãn nguồn** (runbook khác nhau).
 
 ---
 
+## Truth Social / Instagram (cross-platform, chỉ j7)
+Post Truth/IG đến qua event `external_message` → `normalize-j7.normPlatform` → `{kind:"platform", platform, sub, actor, postUrl, thumb…}`. render bởi `be-core/message.buildPlatformMessage` (🟣 Truth / 📸 IG, link gốc nền tảng).
+- **Add/remove account Truth/IG trên j7 là ADMIN-ONLY** (user thường 403) → list là **global admin-curated (~6 Truth + ~65 IG)**. Mình **chỉ ĐỌC** list (tracker-sync-j7 capture vào `j7_platform`).
+- Vì không /add được, **mô hình opt-in per-user**: user **BẬT master** `settings.truth`/`ig` **+ FOLLOW** account cụ thể (picker FE) → mới nhận. Dispatch: `watchersOfHandle(handle, platform)` (chỉ platform-watch) ∩ `settings[platform] on`.
+- **`watches.platform`**: X giữ `_id=tg:handle`; truth/ig = `tg:platform:handle`. Mọi query X lọc `X_ONLY` (platform "x"/thiếu) → **platform KHÔNG lẫn flow X** (limit/list/track đều không tính).
+- FE: nút 🟣/📸 ở welcome → `platformScreen` (nút Enable + list account ✅/➕).
+
 ## Canonical event (2 nguồn cùng đổ về)
 `{ kind, authorId(xid), actor(handle), actorName, content, tweetId, target, parentId, images[], hasVideo, createdAt, source, [deletedIsRetweet|undo|field|oldValue|newValue|profileCard|pinnedIsReply] }`
 `source` (`bloom`|`j7`) do **engine gắn ở biên** (wrapper `dispatchBloom`/`dispatchJ7`), không nhét trong builder.
@@ -158,4 +166,4 @@ Bật j7: `npm install` (socket.io-client) → set `J7_SESSION_TOKEN` → `pm2 s
 - **1 FE duy nhất** (409). 2 BE chỉ gửi → chạy song song OK. **1 kol-be + 1 kol-be-j7** (chạy 2 bản mỗi loại = gửi 2 lần cho tới khi dedup, tránh).
 - j7 down → gate tự tắt sau 10' → Bloom-only (không mất noti, chỉ mất pins/unpins + latency j7).
 - Bloom down → j7 vẫn chạy cho account nó cover (nhưng thiếu verified/edit/compliance + account ngoài j7-list).
-- **Deferred:** affiliation-j7, privacy, Truth/IG, tweet edit — shape đã có trong `normalize-j7`, mở khi cần.
+- **Deferred:** affiliation-j7, privacy (private/public), tweet edit — shape đã có trong `normalize-j7`, mở khi cần. (Truth/IG đã bật ở M5.)
