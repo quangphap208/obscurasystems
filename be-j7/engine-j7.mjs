@@ -15,6 +15,7 @@ import { TrackerSyncJ7 } from "./tracker-sync-j7.mjs";
 import { loadToken, saveToken, sessionCheck, daysLeft } from "./session.mjs";
 import { slackAlert } from "../shared/slack.mjs";
 import { makeFeedWatchdog } from "../be-core/watchdog.mjs";
+import { makeExpandBuffer } from "./expand-buffer.mjs";
 
 assertBE();
 if (!cfg.j7Session) { console.error("❌ Thiếu J7_SESSION_TOKEN trong .env — BE j7 không chạy."); await slackAlert("❌ *j7* BE: thiếu J7_SESSION_TOKEN — không chạy."); process.exit(1); }
@@ -31,13 +32,26 @@ let token = loadToken(TOKEN_FILE, cfg.j7Session);
 const dispatch = makeDispatcher({ tg, getBotUser: () => botUser, warmupUntil: Date.now() + WARMUP_MS });
 // watchdog: mỗi event feed j7 -> touch(); im lặng > feedSilenceMin phút -> Slack (socket treo ngầm).
 const watchdog = makeFeedWatchdog({ source: "j7", silenceMinutes: cfg.feedSilenceMin, tg, adminIds: cfg.adminIds });
+// buffer 2 pha: tweet `tweet` (snapshot cắt) -> đợi `tweet_update` isExpandedUpdate (đầy đủ) thay thế.
+const buf = makeExpandBuffer({ dispatch });
+const TWEET_KINDS = new Set(["tweet", "retweet", "quote", "reply"]);
 
 function onEvent(raw, kind) {
   watchdog.touch();
   try {
+    if (kind === "update") {
+      if (!raw?.isExpandedUpdate) return;              // update chỉ metric/edit -> bỏ; chỉ nhận bản mở rộng
+      const ev = normalizeJ7(raw, "tweet");            // isExpandedUpdate = tweet ĐẦY ĐỦ (full text/media/type)
+      if (ev) { ev.source = "j7"; buf.expanded(ev); }
+      return;
+    }
     const out = normalizeJ7(raw, kind);
     if (!out) return;                                  // profile trả MẢNG (1 event / field); còn lại 1 event
-    for (const e of (Array.isArray(out) ? out : [out])) { e.source = "j7"; dispatch(e); }
+    for (const e of (Array.isArray(out) ? out : [out])) {
+      e.source = "j7";
+      // tweet-like -> qua buffer (đợi expansion nếu cắt); follow/pin/profile/platform -> gửi thẳng.
+      if (TWEET_KINDS.has(e.kind)) buf.tweet(e, raw); else dispatch(e);
+    }
   } catch (err) { console.warn("[j7 normalize]", err.message); }
 }
 
@@ -93,7 +107,7 @@ async function main() {
     keepaliveTimer = setInterval(tick, cfg.j7KeepaliveHours * 3600000);
   }
 
-  const shutdown = async () => { sync?.stop(); watchdog.stop(); clearInterval(keepaliveTimer); feed.stop(); await close().catch(() => {}); process.exit(0); };
+  const shutdown = async () => { sync?.stop(); watchdog.stop(); buf.stop(); clearInterval(keepaliveTimer); feed.stop(); await close().catch(() => {}); process.exit(0); };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 }
