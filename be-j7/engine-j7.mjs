@@ -13,9 +13,10 @@ import { J7Feed } from "./j7feed.mjs";
 import { normalizeJ7 } from "./normalize-j7.mjs";
 import { TrackerSyncJ7 } from "./tracker-sync-j7.mjs";
 import { loadToken, saveToken, sessionCheck, daysLeft } from "./session.mjs";
+import { slackAlert } from "../shared/slack.mjs";
 
 assertBE();
-if (!cfg.j7Session) { console.error("❌ Thiếu J7_SESSION_TOKEN trong .env — BE j7 không chạy."); process.exit(1); }
+if (!cfg.j7Session) { console.error("❌ Thiếu J7_SESSION_TOKEN trong .env — BE j7 không chạy."); await slackAlert("❌ *j7* BE: thiếu J7_SESSION_TOKEN — không chạy."); process.exit(1); }
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const TOKEN_FILE = join(__dir, "state", "j7_token.txt");
@@ -42,6 +43,7 @@ async function alertSession(msg) {
   sessionAlerted = true;
   for (const id of cfg.adminIds)
     tg.notify(id, `⚠️ <b>BE j7 session lỗi</b> — ${msg}. Cập nhật <code>J7_SESSION_TOKEN</code> trong .env (đăng nhập lại lấy localStorage.sessionId) rồi restart be-j7.`);
+  await slackAlert(`⚠️ *j7* session lỗi — ${msg}. Cập nhật J7_SESSION_TOKEN + restart be-j7.`);
   console.error("[j7 session]", msg);
 }
 
@@ -91,4 +93,4 @@ async function main() {
   process.on("SIGTERM", shutdown);
 }
 
-main().catch((e) => { console.error("FATAL", e); process.exit(1); });
+main().catch(async (e) => { console.error("FATAL", e); await slackAlert(`❌ *j7* engine FATAL: ${e.message}`); process.exit(1); });

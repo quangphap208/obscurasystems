@@ -62,6 +62,8 @@ export const cfg = {
   // OBSERVE_ONLY (TEST): tắt tracker-sync cả 2 BE -> CHỈ tap feed read-only, KHÔNG track/untrack ->
   // account Bloom/j7 chung KHÔNG đổi -> prod không ảnh hưởng. Chạy local nghe ké feed prod đang track.
   observeOnly: process.env.OBSERVE_ONLY === "1",
+  // Slack Incoming Webhook: alert lỗi Bloom/j7 (session expired / auth / FATAL). Trống = tắt. Để trong .env.
+  slackWebhook: process.env.SLACK_WEBHOOK || "",
 };
 
 export function assertFE() {

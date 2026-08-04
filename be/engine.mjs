@@ -9,6 +9,7 @@ import { makeDispatcher } from "../be-core/dispatch.mjs";
 import { BloomPool } from "./pool.mjs";
 import { TrackerSync } from "./tracker-sync.mjs";
 import { ProfilePoller } from "./profile-poller.mjs";
+import { slackAlert } from "../shared/slack.mjs";
 
 assertBE();
 
@@ -39,11 +40,12 @@ async function main() {
     onExpired: async (acc) => {
       await repo.setBloomStatus(acc.id, "expired");
       for (const id of cfg.adminIds) tg.notify(id, `⚠️ <b>Shard #${acc.id}</b> (${acc.label || "source"}) session expired. Update the token and restart the engine.`);
+      await slackAlert(`⚠️ *Bloom* shard #${acc.id} (${acc.label || "source"}) session EXPIRED — cập nhật token + restart engine.`);
     },
   });
   const alive = await pool.startAll(accounts);
   console.log(`✅ ${alive}/${accounts.length} shard sống.`);
-  if (!alive) { console.error("Không shard nào kết nối được — kiểm tra session Bloom."); process.exit(1); }
+  if (!alive) { console.error("Không shard nào kết nối được — kiểm tra session Bloom."); await slackAlert("❌ *Bloom* engine: không shard nào kết nối được — kiểm tra session Bloom."); process.exit(1); }
 
   let sync = null;
   if (cfg.observeOnly) {
@@ -72,4 +74,4 @@ async function main() {
   process.on("SIGTERM", shutdown);
 }
 
-main().catch((e) => { console.error("FATAL", e); process.exit(1); });
+main().catch(async (e) => { console.error("FATAL", e); await slackAlert(`❌ *Bloom* engine FATAL: ${e.message}`); process.exit(1); });
