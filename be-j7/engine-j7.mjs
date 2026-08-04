@@ -14,6 +14,7 @@ import { normalizeJ7 } from "./normalize-j7.mjs";
 import { TrackerSyncJ7 } from "./tracker-sync-j7.mjs";
 import { loadToken, saveToken, sessionCheck, daysLeft } from "./session.mjs";
 import { slackAlert } from "../shared/slack.mjs";
+import { makeFeedWatchdog } from "../be-core/watchdog.mjs";
 
 assertBE();
 if (!cfg.j7Session) { console.error("❌ Thiếu J7_SESSION_TOKEN trong .env — BE j7 không chạy."); await slackAlert("❌ *j7* BE: thiếu J7_SESSION_TOKEN — không chạy."); process.exit(1); }
@@ -28,8 +29,11 @@ let token = loadToken(TOKEN_FILE, cfg.j7Session);
 // warmupUntil cố định lúc start: nuốt backlog initialTweets đầu tiên. Reconnect replay được
 // deliveries dedup lo (đã gửi -> bỏ; chưa gửi -> catch-up), nên không cần reset per-connect.
 const dispatch = makeDispatcher({ tg, getBotUser: () => botUser, warmupUntil: Date.now() + WARMUP_MS });
+// watchdog: mỗi event feed j7 -> touch(); im lặng > feedSilenceMin phút -> Slack (socket treo ngầm).
+const watchdog = makeFeedWatchdog({ source: "j7", silenceMinutes: cfg.feedSilenceMin, tg, adminIds: cfg.adminIds });
 
 function onEvent(raw, kind) {
+  watchdog.touch();
   try {
     const out = normalizeJ7(raw, kind);
     if (!out) return;                                  // profile trả MẢNG (1 event / field); còn lại 1 event
@@ -62,6 +66,7 @@ async function main() {
     onAuthError: (m) => alertSession(m),
   });
   feed.start();
+  if (cfg.feedSilenceMin > 0) { watchdog.start(); console.log(`Watchdog: alert nếu feed im lặng > ${cfg.feedSilenceMin} phút.`); }
   console.log(`✅ BE-j7 chạy (socket ${cfg.j7Host}). Nuốt backlog initialTweets + ${WARMUP_MS / 1000}s warmup.`);
 
   // tracker-sync: add pool account (watched ∩ pool) vào feed + lưu j7_list (cover main ∪ pool).
@@ -88,7 +93,7 @@ async function main() {
     keepaliveTimer = setInterval(tick, cfg.j7KeepaliveHours * 3600000);
   }
 
-  const shutdown = async () => { sync?.stop(); clearInterval(keepaliveTimer); feed.stop(); await close().catch(() => {}); process.exit(0); };
+  const shutdown = async () => { sync?.stop(); watchdog.stop(); clearInterval(keepaliveTimer); feed.stop(); await close().catch(() => {}); process.exit(0); };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 }

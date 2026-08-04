@@ -4,6 +4,7 @@
 import * as repo from "../shared/repo.mjs";
 import { handshake, searchUsers, trackNames, untrackIds, fetchState } from "./lib/tsunami.mjs";
 import { cfg } from "../shared/config.mjs";
+import { slackAlert } from "../shared/slack.mjs";
 
 const KEY_TTL = 10 * 60 * 1000;
 
@@ -11,7 +12,7 @@ export class TrackerSync {
   constructor({ pool, tg, adminIds = [] }) {
     this.pool = pool; this.tg = tg; this.adminIds = adminIds;
     this.keys = new Map();          // session -> {key, ts}
-    this.busy = false; this.lastAlert = 0;
+    this.busy = false; this.lastAlert = 0; this.lastSlack = 0;
   }
 
   async keyFor(session) {
@@ -22,8 +23,14 @@ export class TrackerSync {
     return key;
   }
 
-  alert(msg) {
+  // toSlack: chỉ các lỗi ĐÁNG BÁO XA (pool đầy, không shard sống, reconcile lỗi). Slack rate-limit 5'
+  // riêng để pool-full không bị nuốt bởi 1 alert self-heal trước đó (2 mốc thời gian độc lập).
+  alert(msg, toSlack = false) {
     console.warn("[tracker-sync]", msg);
+    if (toSlack && Date.now() - this.lastSlack > 300000) {
+      this.lastSlack = Date.now();
+      slackAlert(`⚠️ *Bloom* tracker-sync: ${msg}`);
+    }
     if (Date.now() - this.lastAlert < 60000) return;
     this.lastAlert = Date.now();
     for (const id of this.adminIds) this.tg.notify(id, `⚠️ <b>Source pool</b>: ${msg}`);
@@ -70,12 +77,12 @@ export class TrackerSync {
       const trackedSet = new Set((await repo.allTracked()).map((t) => t.handle));
       for (const h of desired) if (!trackedSet.has(h) || needAssign.has(h)) needAssign.add(h);
 
-      if (!activeIds.size) { if (desired.size) this.alert("no live shard — a source session needs updating."); return; }
+      if (!activeIds.size) { if (desired.size) this.alert("no live shard — a source session needs updating.", true); return; }
 
       // 3) gán + track
       for (const h of needAssign) {
         const shard = this.pickShard(accounts, activeIds, load);
-        if (!shard) { this.alert(`pool full — @${h} could not be tracked. Add a source account or raise capacity.`); continue; }
+        if (!shard) { this.alert(`pool full — @${h} could not be tracked. Add a source account or raise capacity.`, true); continue; }
         let xid = await repo.xidForHandle(h);
         try {
           const key = await this.keyFor(shard.session_token);
@@ -139,6 +146,9 @@ export class TrackerSync {
           }
         }
       }
+    } catch (e) {
+      console.error("[tracker-sync] reconcile lỗi:", e.message);
+      this.alert(`reconcile lỗi: ${e.message}`, true);
     } finally { this.busy = false; }
   }
 

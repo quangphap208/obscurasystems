@@ -3,6 +3,7 @@
 // list -> bỏ (Bloom lo, đúng routing dual-source). Cũng lưu j7_list vào Mongo cho gate isJ7Covered (M4).
 // Dùng CHUNG socket của J7Feed (get_all_watched_accounts + custom_accounts_*_available_batch).
 import * as repo from "../shared/repo.mjs";
+import { slackAlert } from "../shared/slack.mjs";
 
 // account từ j7 có thể là string hoặc object {handle|username} -> handle lowercase, bỏ @.
 const handles = (arr) => (arr || [])
@@ -16,6 +17,14 @@ export class TrackerSyncJ7 {
     this.adminIds = adminIds;
     this.added = new Set();   // pool handle MÌNH đã add (để tính universe đầy đủ + biết cái nào gỡ được)
     this.busy = false;
+    this.lastSlack = 0;
+  }
+
+  // reconcile lỗi -> Slack (rate-limit 5' để không spam mỗi lần response về).
+  slack(msg) {
+    if (Date.now() - this.lastSlack < 300000) return;
+    this.lastSlack = Date.now();
+    slackAlert(`⚠️ *j7* tracker-sync: ${msg}`);
   }
 
   // interval mặc định 5 phút: get_all_watched_accounts trả ~7800 account, list đổi CHẬM (vài chục/ngày)
@@ -23,7 +32,7 @@ export class TrackerSyncJ7 {
   // Bloom cover account mới /add NGAY; j7 chỉ cần vào race trong ~5' (pins/unpins KOL mới trễ tối đa 5').
   start(intervalMs = 300000) {
     this.feed.on("all_watched_accounts_response", (r) =>
-      this.reconcile(r).catch((e) => console.warn("[j7-sync]", e.message)));
+      this.reconcile(r).catch((e) => { console.warn("[j7-sync]", e.message); this.slack(`reconcile lỗi: ${e.message}`); }));
     this.tick();
     this._t = setInterval(() => this.tick(), intervalMs);
     return this._t;

@@ -10,6 +10,7 @@ import { BloomPool } from "./pool.mjs";
 import { TrackerSync } from "./tracker-sync.mjs";
 import { ProfilePoller } from "./profile-poller.mjs";
 import { slackAlert } from "../shared/slack.mjs";
+import { makeFeedWatchdog } from "../be-core/watchdog.mjs";
 
 assertBE();
 
@@ -33,10 +34,13 @@ async function main() {
   }
   console.log(`Pool: ${accounts.length} tài khoản Bloom`, accounts.map((a) => `#${a.id}(${a.label || "bloom"})`).join(" "));
 
+  // watchdog: mỗi frame Bloom -> touch(); im lặng > feedSilenceMin phút -> Slack (WS treo ngầm).
+  const watchdog = makeFeedWatchdog({ source: "Bloom", silenceMinutes: cfg.feedSilenceMin, tg, adminIds: cfg.adminIds });
+
   let poller = null;   // gán bên dưới; onFrame tham chiếu qua closure (chạy sau khi đã gán).
   const pool = new BloomPool({
     headless: cfg.headless,
-    onFrame: (frame) => { poller?.observeFrame(frame); dispatchBloom(normalize(frame)); },
+    onFrame: (frame) => { watchdog.touch(); poller?.observeFrame(frame); dispatchBloom(normalize(frame)); },
     onExpired: async (acc) => {
       await repo.setBloomStatus(acc.id, "expired");
       for (const id of cfg.adminIds) tg.notify(id, `⚠️ <b>Shard #${acc.id}</b> (${acc.label || "source"}) session expired. Update the token and restart the engine.`);
@@ -46,6 +50,7 @@ async function main() {
   const alive = await pool.startAll(accounts);
   console.log(`✅ ${alive}/${accounts.length} shard sống.`);
   if (!alive) { console.error("Không shard nào kết nối được — kiểm tra session Bloom."); await slackAlert("❌ *Bloom* engine: không shard nào kết nối được — kiểm tra session Bloom."); process.exit(1); }
+  if (cfg.feedSilenceMin > 0) { watchdog.start(); console.log(`Watchdog: alert nếu feed im lặng > ${cfg.feedSilenceMin} phút.`); }
 
   let sync = null;
   if (cfg.observeOnly) {
@@ -69,7 +74,7 @@ async function main() {
 
   console.log(`Engine chạy. Bỏ qua backlog ${cfg.warmupMs / 1000}s rồi bắt đầu gửi.`);
 
-  const shutdown = async () => { sync?.stop(); poller?.stop(); clearInterval(statsTimer); await pool.stopAll(); await close().catch(() => {}); process.exit(0); };
+  const shutdown = async () => { sync?.stop(); poller?.stop(); watchdog.stop(); clearInterval(statsTimer); await pool.stopAll(); await close().catch(() => {}); process.exit(0); };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 }
