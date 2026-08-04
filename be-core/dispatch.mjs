@@ -10,16 +10,19 @@ import { rememberTweet, enrichDelete } from "./tweet-cache.mjs";
 // Field profile mà j7 SỞ HỮU (map từ 6 field j7). verified_badge/handle KHÔNG ở đây -> Bloom vẫn giữ.
 const J7_PROFILE_FIELDS = new Set(["screenname", "bio", "geo", "profile_picture", "banner_picture", "url"]);
 
-// Cache j7-coverage (main ∪ pool) refresh 60s. Nếu j7_list cũ >10' (j7 down) -> coi RỖNG để Bloom tự
-// lo profile lại (fallback an toàn). j7 tắt hẳn -> luôn rỗng -> gate không kích hoạt -> hành vi Bloom-only.
+// Cache j7-coverage refresh 60s. CHỈ tin `main` (main-feed): response j7 trả main TƯƠI mỗi lần nên
+// account bị j7 drop -> rớt khỏi main ngay -> gate nhả -> Bloom bù. KHÔNG dùng `pool`: pool gồm
+// this.added mà response KHÔNG trả `custom.accounts` -> không phát hiện được pool-account bị drop ->
+// nếu gate theo pool sẽ chặn Bloom trong khi j7 đã ngừng stream -> MẤT profile. Pool account vì thế
+// KHÔNG bị gate (Bloom luôn bù); double được tránh bằng canon avatar bên j7 (dedup qua race).
+// j7 down (list cũ >10') -> rỗng -> Bloom lo hết. j7 tắt hẳn -> rỗng -> hành vi Bloom-only.
 let _j7cover = new Set(), _j7At = 0;
 async function isJ7Covered(handle) {
   if (Date.now() - _j7At > 60000) {
     _j7At = Date.now();
     try {
       const d = await repo.getJ7List();
-      _j7cover = (d && Date.now() - (d.updated_at || 0) < 600000)
-        ? new Set([...(d.main || []), ...(d.pool || [])]) : new Set();
+      _j7cover = (d && Date.now() - (d.updated_at || 0) < 600000) ? new Set(d.main || []) : new Set();
     } catch { /* lỗi -> giữ cache cũ */ }
   }
   return _j7cover.has(handle);

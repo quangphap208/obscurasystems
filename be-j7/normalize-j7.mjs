@@ -9,6 +9,7 @@
 //   • external (Truth/IG) / update(edit) -> ngoài phạm vi X-tracker dual-source.
 
 import { makeProfileEvent } from "../be-core/message.mjs";
+import { canonAvatar } from "../be-core/canon.mjs";
 
 const urls = (arr) => (arr || []).map((m) => (typeof m === "string" ? m : m && m.url)).filter(Boolean);
 
@@ -139,8 +140,9 @@ function normProfile(raw) {
   add("screenname", b.name, p.name);            // display name
   add("bio", bioOld, bioNow);
   add("geo", b.location, p.location);           // location -> geo (vocab Bloom)
-  add("profile_picture", b.avatar, p.avatar);   // avatar (makeProfileEvent tự set images)
-  add("banner_picture", b.banner, p.banner);    // banner
+  // canon avatar/banner (bỏ hậu tố kích cỡ) -> khớp dedupKey với Bloom poller -> pool account không double.
+  add("profile_picture", canonAvatar(b.avatar), canonAvatar(p.avatar));
+  add("banner_picture", canonAvatar(b.banner), canonAvatar(p.banner));
   add("url", b.url?.url, p.url?.url);            // website -> url
   return out.length ? out : null;
 }
