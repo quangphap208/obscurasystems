@@ -10,6 +10,7 @@
     "be-j7": "node be-j7/engine-j7.mjs",
     "fe": "node fe/bot.mjs",
     "seed": "node scripts/seed.mjs",
+    "inject": "node scripts/inject_event.mjs",
     "verify": "node scripts/verify_format.mjs"
   },
   "dependencies": {
