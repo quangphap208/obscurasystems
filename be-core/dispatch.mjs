@@ -89,7 +89,9 @@ export function makeDispatcher({ tg, getBotUser, warmupUntil = 0 }) {
         try {
           const race = await repo.monitorMark(key, e.source);
           if (race.firstShow) {                            // bỏ re-emit cùng nguồn (Bloom feed lặp) -> 1 dòng/nguồn/event
-            const tag = race.won ? `🏆 ${e.source || "?"}` : `dup ← ${race.firstSource}`;
+            // dup ← X CHỈ khi nguồn KHÁC thắng trước. Nếu "winner" là CHÍNH nguồn này (twin re-emit cùng
+            // nguồn chạy song song -> race 2 khoá tách nhau) thì KHÔNG phải dup chéo nguồn -> hiện 🏆.
+            const tag = (race.won || race.firstSource === (e.source || "?")) ? `🏆 ${e.source || "?"}` : `dup ← ${race.firstSource}`;
             const gtag = gated ? " · ⏸cắt→bloom" : "";
             const head = `<b>[${e.source || "?"} · ${tag}${gtag}]</b> <code>${e.kind}${e.platform ? ":" + e.platform : ""}</code> @${handle}`;
             if (gated) {
