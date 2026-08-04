@@ -63,9 +63,14 @@ async function main() {
   console.log(`✅ BE-j7 chạy (socket ${cfg.j7Host}). Nuốt backlog initialTweets + ${WARMUP_MS / 1000}s warmup.`);
 
   // tracker-sync: add pool account (watched ∩ pool) vào feed + lưu j7_list (cover main ∪ pool).
-  const sync = new TrackerSyncJ7({ feed, adminIds: cfg.adminIds });
-  sync.start(300000);
-  console.log("j7 tracker-sync: reconcile watched ∩ j7-list mỗi 5 phút (add/remove pool + lưu j7_list).");
+  let sync = null;
+  if (cfg.observeOnly) {
+    console.log("👁  OBSERVE_ONLY: KHÔNG add/remove pool j7 — chỉ nghe feed (j7 account chung không đổi).");
+  } else {
+    sync = new TrackerSyncJ7({ feed, adminIds: cfg.adminIds });
+    sync.start(300000);
+    console.log("j7 tracker-sync: reconcile watched ∩ j7-list mỗi 5 phút (add/remove pool + lưu j7_list).");
+  }
 
   // keepalive: định kỳ validate token; server rotate (X-New-Token) -> lưu đè + áp reconnect.
   let keepaliveTimer = null;
@@ -81,7 +86,7 @@ async function main() {
     keepaliveTimer = setInterval(tick, cfg.j7KeepaliveHours * 3600000);
   }
 
-  const shutdown = async () => { sync.stop(); clearInterval(keepaliveTimer); feed.stop(); await close().catch(() => {}); process.exit(0); };
+  const shutdown = async () => { sync?.stop(); clearInterval(keepaliveTimer); feed.stop(); await close().catch(() => {}); process.exit(0); };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 }

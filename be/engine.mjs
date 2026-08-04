@@ -45,8 +45,13 @@ async function main() {
   console.log(`✅ ${alive}/${accounts.length} shard sống.`);
   if (!alive) { console.error("Không shard nào kết nối được — kiểm tra session Bloom."); process.exit(1); }
 
-  const sync = new TrackerSync({ pool, tg, adminIds: cfg.adminIds });
-  sync.start(20000);
+  let sync = null;
+  if (cfg.observeOnly) {
+    console.log("👁  OBSERVE_ONLY: KHÔNG track/untrack — chỉ tap feed read-only (tracked-set Bloom prod không đổi).");
+  } else {
+    sync = new TrackerSync({ pool, tg, adminIds: cfg.adminIds });
+    sync.start(20000);
+  }
   // prune do Mongo TTL index tự lo (tweet_cache, deliveries).
 
   // profile-poller: feed-driven (real-time cho account có tweet) + poll fallback cho account im lặng.
@@ -62,7 +67,7 @@ async function main() {
 
   console.log(`Engine chạy. Bỏ qua backlog ${cfg.warmupMs / 1000}s rồi bắt đầu gửi.`);
 
-  const shutdown = async () => { sync.stop(); poller?.stop(); clearInterval(statsTimer); await pool.stopAll(); await close().catch(() => {}); process.exit(0); };
+  const shutdown = async () => { sync?.stop(); poller?.stop(); clearInterval(statsTimer); await pool.stopAll(); await close().catch(() => {}); process.exit(0); };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 }

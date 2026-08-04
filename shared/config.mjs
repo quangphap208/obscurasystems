@@ -59,6 +59,9 @@ export const cfg = {
   // Monitor firehose (TEST/QC): copy MỌI event (cả 2 nguồn) + race-outcome vào 1 channel. Trống = TẮT
   // (prod không đụng). Đặt = chat_id channel test để soi merge 2 BE ở local. buildMessage FULL render.
   monitorChat: process.env.MONITOR_CHAT || "",
+  // OBSERVE_ONLY (TEST): tắt tracker-sync cả 2 BE -> CHỈ tap feed read-only, KHÔNG track/untrack ->
+  // account Bloom/j7 chung KHÔNG đổi -> prod không ảnh hưởng. Chạy local nghe ké feed prod đang track.
+  observeOnly: process.env.OBSERVE_ONLY === "1",
 };
 
 export function assertFE() {
