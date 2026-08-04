@@ -7,6 +7,7 @@
   "scripts": {
     "migrate": "node shared/migrate.mjs",
     "be": "node be/engine.mjs",
+    "be-j7": "node be-j7/engine-j7.mjs",
     "fe": "node fe/bot.mjs",
     "seed": "node scripts/seed.mjs",
     "verify": "node scripts/verify_format.mjs"
@@ -14,7 +15,8 @@
   "dependencies": {
     "grammy": "^1.30.0",
     "mongodb": "^6.21.0",
-    "playwright": "^1.56.0"
+    "playwright": "^1.56.0",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "mongodb-memory-server": "^11.2.0"

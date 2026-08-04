@@ -52,6 +52,10 @@ export const cfg = {
   profilePollMs: Number(process.env.PROFILE_POLL_MS || 120000),   // fallback 2 phút (feed-driven lo real-time)
   // /subscribe: MẶC ĐỊNH TẮT (giai đoạn test). Đặt SUBS_ENABLED=1 khi mở bán Pro.
   subsEnabled: process.env.SUBS_ENABLED === "1",
+  // --- BE j7 (nguồn thứ 2, chạy song song Bloom) — auth JWT socket, KHÁC Bloom hoàn toàn (xem be-j7/). ---
+  j7Host: process.env.J7_HOST || "https://nyc.j7tracker.io",   // host socket + /api/session-check
+  j7Session: process.env.J7_SESSION_TOKEN || "",               // JWT gốc = localStorage.sessionId trên j7tracker.io
+  j7KeepaliveHours: Number(process.env.J7_KEEPALIVE_HOURS || 6), // chu kỳ validate + rotate token
 };
 
 export function assertFE() {

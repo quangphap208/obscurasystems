@@ -19,5 +19,16 @@ module.exports = {
       restart_delay: 5000,
       env: { NODE_ENV: "production" },
     },
+    {
+      // BE thứ 2 (nguồn j7). Chạy song song kol-be; dedup chéo qua Mongo `deliveries`.
+      // Chỉ bật khi đã cấu hình J7_SESSION_TOKEN. Tắt: pm2 stop kol-be-j7.
+      name: "kol-be-j7",
+      script: "be-j7/engine-j7.mjs",
+      cwd: __dirname,
+      autorestart: true,
+      max_restarts: 20,
+      restart_delay: 5000,
+      env: { NODE_ENV: "production" },
+    },
   ],
 };
