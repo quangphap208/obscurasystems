@@ -1,6 +1,7 @@
 // verify_format.mjs — self-test format module: render mẫu 7 loại tin (send_like_source.md §12).
 // Không cần DB/network. `npm run verify`.
-import { normalize, buildMessage } from "../be/lib/format.mjs";
+import { normalize } from "../be/normalize.mjs";
+import { buildMessage } from "../be-core/message.mjs";
 
 const B = { botUser: "kolbot" };
 const F = [

@@ -1,5 +1,6 @@
-// telegram.mjs — gửi Telegram Bot API: hàng đợi per-chat + rate-limit 429.
-// Payload dựng từ format.buildMessage: { text, link_preview_options, reply_markup }.
+// telegram.mjs (be-core) — gửi Telegram Bot API: hàng đợi per-chat + rate-limit 429.
+// Sender DÙNG CHUNG cho BE Bloom + BE j7 (cùng BOT_TOKEN). Auth của từng nguồn KHÔNG nằm ở đây.
+// Payload dựng từ message.buildMessage: { text, link_preview_options, reply_markup }.
 const API = (token, m) => `https://api.telegram.org/bot${token}/${m}`;
 
 export class Telegram {

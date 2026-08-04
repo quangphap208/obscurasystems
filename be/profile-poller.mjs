@@ -6,7 +6,8 @@
 // Dedup theo pc:<xid>:<field>:<newValue> nên nếu Bloom lỡ có bắn frame trùng cũng không gửi 2 lần.
 import * as repo from "../shared/repo.mjs";
 import { handshake, searchUsers } from "./lib/tsunami.mjs";
-import { makeProfileEvent } from "./lib/format.mjs";
+import { makeProfileEvent } from "../be-core/message.mjs";
+import { canonAvatar } from "../be-core/canon.mjs";
 
 const KEY_TTL = 10 * 60 * 1000;
 const CHUNK = 50;              // search nhận batch; ~50 handle/request cho an toàn
@@ -25,13 +26,7 @@ const FEED_FIELDS = [
   { key: "name", sub: "screenname" },
 ];
 
-// Chuẩn hoá URL avatar về khoá ỔN ĐỊNH: bỏ hậu tố kích cỡ (_normal/_bigger/_mini/_400x400…) + query.
-// Cùng 1 ảnh: feed trả `_400x400`, search trả `_normal` — không chuẩn hoá sẽ sinh "đổi avatar" GIẢ và
-// ping-pong vô hạn giữa 2 path (mỗi lần lật = 1 noti). Bản đã bỏ hậu tố = ảnh gốc full-res, dùng luôn preview.
-const canonAvatar = (url) => (String(url || "")
-  .replace(/\?.*$/, "")
-  .replace(/_(normal|bigger|mini|reasonably_small|\d+x\d+)(?=\.\w+$)/i, "")) || null;
-
+// canonAvatar (bỏ hậu tố kích cỡ để so ổn định) đã chuyển sang be-core/canon.mjs — dùng chung Bloom + j7.
 const snapOf = (u) => ({
   x_user_id: u.id != null ? String(u.id) : null,
   avatar: canonAvatar(u.profile_image_url),

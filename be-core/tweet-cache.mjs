@@ -1,5 +1,6 @@
-// tweet-cache.mjs — nhớ nội dung tweet để render event delete (Bloom không trả nội dung khi đã xoá).
-// TTL do Mongo tự prune (index seen_at). Ở đây chỉ ghi/đọc.
+// tweet-cache.mjs (be-core) — nhớ nội dung tweet để render event delete (nguồn không trả nội dung
+// khi đã xoá). DÙNG CHUNG Bloom + j7: nguồn nào thấy tweet trước thì cache; delete từ nguồn nào
+// cũng enrich được từ cache chung. TTL do Mongo tự prune (index seen_at). Ở đây chỉ ghi/đọc.
 import * as repo from "../shared/repo.mjs";
 
 // Lưu mọi tweet-like đã thấy.
@@ -12,7 +13,7 @@ export async function rememberTweet(e) {
   });
 }
 
-// Bổ sung nội dung cho event delete từ cache nếu Bloom gửi thiếu.
+// Bổ sung nội dung cho event delete từ cache nếu nguồn gửi thiếu.
 export async function enrichDelete(e) {
   if (e.kind !== "deleted" || !e.tweetId) return e;
   if (e.content && (e.images?.length || !e.deletedIsRetweet)) return e; // đã đủ

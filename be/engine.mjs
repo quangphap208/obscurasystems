@@ -3,9 +3,9 @@
 import { cfg, assertBE } from "../shared/config.mjs";
 import { connect, close } from "../shared/mongo.mjs";
 import * as repo from "../shared/repo.mjs";
-import { Telegram } from "./lib/telegram.mjs";
-import { normalize } from "./lib/format.mjs";
-import { makeDispatcher } from "./dispatcher.mjs";
+import { Telegram } from "../be-core/telegram.mjs";
+import { normalize } from "./normalize.mjs";
+import { makeDispatcher } from "../be-core/dispatch.mjs";
 import { BloomPool } from "./pool.mjs";
 import { TrackerSync } from "./tracker-sync.mjs";
 import { ProfilePoller } from "./profile-poller.mjs";

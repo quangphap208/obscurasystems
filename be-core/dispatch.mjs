@@ -1,18 +1,11 @@
-// dispatcher.mjs — event Bloom -> tìm user đang watch -> lọc theo settings -> gửi DM.
+// dispatch.mjs (be-core) — canonical event -> tìm user đang watch -> lọc theo settings -> gửi DM.
+// DÙNG CHUNG cho BE Bloom + BE j7. markDelivered (deliveries) là trọng tài race: nguồn nào gọi
+// trước thắng, nguồn sau bị duplicate key -> tự bỏ (không gửi trùng). dedupKey/render đều dùng chung.
 import * as repo from "../shared/repo.mjs";
 import { KIND_TO_COL } from "../shared/settings.mjs";
-import { buildMessage } from "./lib/format.mjs";
+import { buildMessage } from "./message.mjs";
+import { dedupKey } from "./events.mjs";
 import { rememberTweet, enrichDelete } from "./tweet-cache.mjs";
-
-// Khoá dedup ổn định cho 1 event (chưa gắn user).
-function dedupKey(e) {
-  if (e.kind === "deleted") return `del:${e.tweetId}:${e.authorId}`;
-  if (e.kind === "followed" || e.kind === "unfollowed") return `${e.kind}:${e.authorId}:${e.target}`;
-  if (e.kind === "profileChanges") return `pc:${e.authorId}:${e.field}:${e.newValue}`;
-  if (e.kind === "affiliation") return `aff:${e.authorId}:${e.content}`;
-  if (e.kind === "suspended" || e.kind === "deactivated") return `${e.kind}:${e.authorId}:${e.undo ? 1 : 0}`;
-  return `${e.kind}:${e.tweetId}`;
-}
 
 async function resolveHandle(e) {
   if (e.actor) return e.actor.toLowerCase();
@@ -51,7 +44,7 @@ export function makeDispatcher({ tg, getBotUser, warmupUntil = 0 }) {
       let sent = 0;
       for (const { tgId, settings } of watchers) {
         if (!settings[colKey]) continue;                // user tắt loại này
-        if (!(await repo.markDelivered(key, tgId))) continue; // đã gửi cho user này
+        if (!(await repo.markDelivered(key, tgId))) continue; // đã gửi cho user này (hoặc nguồn kia thắng)
         const ev = applyMediaFilter(e, settings);
         const msg = buildMessage(ev, { botUser, deleteButton: !!settings.delete_button });
         if (!msg) continue;
