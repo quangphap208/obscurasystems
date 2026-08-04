@@ -29,13 +29,20 @@ export function makeExpandBuffer({ dispatch }) {
       const incomplete = ev.kind === "retweet" || J7_TRUNCATED.test(ev.content || "") || J7_TRUNCATED.test(raw?.text || "");
       if (!incomplete) { markSent(id); return dispatch(ev); }   // đủ -> gửi ngay
       cancelPending(id);
-      pending.set(id, setTimeout(() => { pending.delete(id); markSent(id); dispatch(ev); }, WAIT_MS));  // hết giờ -> gửi bản cắt
+      console.log(`[j7-buf] hold @${ev.actor || "?"} ${ev.kind} — đợi expansion (${WAIT_MS}ms)`);
+      pending.set(id, setTimeout(() => {
+        pending.delete(id); markSent(id);
+        console.log(`[j7-buf] @${ev.actor || "?"} KHÔNG có expansion sau ${WAIT_MS}ms -> bản cắt (fallback -> gate/Bloom)`);
+        dispatch(ev);
+      }, WAIT_MS));
     },
     // isExpandedUpdate (đã normalize thành tweet đầy đủ) -> thay bản cắt đang đợi.
     expanded(ev) {
       const id = ev.tweetId;
       if (id && dispatched.has(id)) return;   // bản đủ đã gửi -> bỏ (tránh dup reclassify)
+      const wasPending = id && pending.has(id);
       if (id) { cancelPending(id); markSent(id); }
+      if (wasPending) console.log(`[j7-buf] @${ev.actor || "?"} expansion ✓ -> gửi bản ĐẦY ĐỦ (j7 tự render)`);
       dispatch(ev);
     },
     stop() {
