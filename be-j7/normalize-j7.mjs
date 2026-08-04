@@ -35,19 +35,24 @@ function normTweet(raw) {
             : raw.isQuote   || type === "QUOTE"   ? "quote"
             : raw.isReply   || type === "REPLY"   ? "reply"
             : "tweet";
+  // retweet: tweet GỐC ở object/field riêng. raw.text của RT bị X cắt ("RT @x: …" ~preview) -> phải
+  // lấy text + media từ tweet gốc để render đầy đủ NHƯ Bloom (parent_tweet). Thử nhiều field khả dĩ
+  // (originalTweetText là field j7 dùng cho retweet Truth/IG -> nhiều khả năng X cũng có).
+  const orig = raw.originalTweet || raw.retweetedStatus || null;
   let images = urls(raw.media && raw.media.images);
   let videos = urls(raw.media && raw.media.videos);
-  // retweet: media nằm ở tweet gốc -> lấy originalMedia nếu bản thân rỗng
-  if (sub === "retweet" && !images.length && !videos.length && raw.originalMedia) {
-    images = urls(raw.originalMedia.images);
-    videos = urls(raw.originalMedia.videos);
+  if (sub === "retweet" && !images.length && !videos.length) {
+    const om = raw.originalMedia || orig?.media || null;
+    if (om) { images = urls(om.images); videos = urls(om.videos); }
   }
   // j7: replyTo/quotedTweet là object PHẲNG {id,handle,...}; originalAuthor có .handle. Đọc cả 2 dạng.
   let target = null, parentId = null;
   if (sub === "reply")        { target = raw.replyTo?.handle     || raw.replyTo?.author?.handle     || null; parentId = raw.replyTo?.id || null; }
   else if (sub === "quote")   { target = raw.quotedTweet?.handle || raw.quotedTweet?.author?.handle || null; parentId = raw.quotedTweet?.id || null; }
   else if (sub === "retweet") { target = raw.originalAuthor?.handle || raw.originalAuthor?.author?.handle || null; parentId = raw.id || null; }
-  const content = raw.text || (sub === "retweet" ? (raw.quotedTweet?.text || "") : "");
+  // retweet: ƯU TIÊN text tweet gốc (đầy đủ) hơn raw.text (bản cắt). Rỗng hết -> raw.text (không tệ hơn cũ).
+  const origText = raw.originalTweetText || orig?.text || raw.originalText || "";
+  const content = sub === "retweet" ? (origText || raw.text || "") : (raw.text || "");
   return {
     kind: sub,
     authorId: a.id ? String(a.id) : null,
