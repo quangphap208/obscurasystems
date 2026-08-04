@@ -59,6 +59,9 @@ export const cfg = {
   // Monitor firehose (TEST/QC): copy MỌI event (cả 2 nguồn) + race-outcome vào 1 channel. Trống = TẮT
   // (prod không đụng). Đặt = chat_id channel test để soi merge 2 BE ở local. buildMessage FULL render.
   monitorChat: process.env.MONITOR_CHAT || "",
+  // MONITOR_ONLY (TEST): chỉ gửi monitor channel, BỎ vòng DM user (test DB clone watches prod nhưng
+  // user chưa /start bot test -> 400 chat-not-found). Mặc định tắt -> prod DM bình thường.
+  monitorOnly: process.env.MONITOR_ONLY === "1",
   // OBSERVE_ONLY (TEST): tắt tracker-sync cả 2 BE -> CHỈ tap feed read-only, KHÔNG track/untrack ->
   // account Bloom/j7 chung KHÔNG đổi -> prod không ảnh hưởng. Chạy local nghe ké feed prod đang track.
   observeOnly: process.env.OBSERVE_ONLY === "1",

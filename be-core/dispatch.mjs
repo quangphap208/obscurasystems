@@ -83,6 +83,10 @@ export function makeDispatcher({ tg, getBotUser, warmupUntil = 0 }) {
           }
         } catch (err) { console.warn("[monitor]", err.message); }
       }
+      // MONITOR_ONLY (TEST): chỉ bắn monitor channel, KHÔNG thử DM user. Test DB clone watches user prod
+      // nhưng họ chưa /start bot test -> DM trả 400 chat-not-found + ăn rate-limit làm nghẽn monitor.
+      // Mặc định TẮT -> prod gửi DM bình thường (flow chung không đổi).
+      if (cfg.monitorOnly) return;
       let sent = 0;
       for (const { tgId, settings } of watchers) {
         if (!settings[colKey]) continue;                // user tắt loại này
