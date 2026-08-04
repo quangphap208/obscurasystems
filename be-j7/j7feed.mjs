@@ -67,5 +67,9 @@ export class J7Feed {
     if (this.socket) this.socket.auth = { token };
   }
 
+  // Passthrough cho tracker-sync-j7 dùng chung 1 socket (get_all_watched_accounts + add/remove pool).
+  emit(event, payload) { if (this.socket) this.socket.emit(event, payload); }
+  on(event, cb) { if (this.socket) this.socket.on(event, cb); return this; }
+
   stop() { if (this.socket) { try { this.socket.disconnect(); } catch {} } }
 }

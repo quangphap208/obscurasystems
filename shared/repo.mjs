@@ -184,6 +184,14 @@ export async function setProfileSnap(handle, snap) {
   await col("profile_snap").updateOne({ _id: handle.toLowerCase() }, { $set: { ...snap, updated_at: now() } }, { upsert: true });
 }
 
+// ---------- j7 list (nguồn 2: handle j7 CÓ THỂ cover free = main-feed ∪ available pool) ----------
+// 1 doc __j7list__ do tracker-sync-j7 ghi định kỳ. Dùng cho gate isJ7Covered (M4 source-preference:
+// profile lấy từ j7 nếu account được j7 cover; ngoài list -> Bloom lo). Process nào đọc/ghi cũng được.
+export async function saveJ7List({ main = [], pool = [] } = {}) {
+  await col("j7_list").updateOne({ _id: "__j7list__" }, { $set: { main, pool, updated_at: now() } }, { upsert: true });
+}
+export async function getJ7List() { return col("j7_list").findOne({ _id: "__j7list__" }); }
+
 // ---------- user_stats (rollup: mỗi bot-user add bao nhiêu account X — phần "ngoài default") ----------
 // 1 doc / user + 1 doc "__totals__". Refresh định kỳ ở BE (engine) và có scripts/stats.mjs xem tay.
 // "ngoài default" = chính các handle user tự add (watches); default của Bloom không nằm ở đây.

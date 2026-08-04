@@ -11,6 +11,7 @@ import { Telegram } from "../be-core/telegram.mjs";
 import { makeDispatcher } from "../be-core/dispatch.mjs";
 import { J7Feed } from "./j7feed.mjs";
 import { normalizeJ7 } from "./normalize-j7.mjs";
+import { TrackerSyncJ7 } from "./tracker-sync-j7.mjs";
 import { loadToken, saveToken, sessionCheck, daysLeft } from "./session.mjs";
 
 assertBE();
@@ -60,6 +61,11 @@ async function main() {
   feed.start();
   console.log(`✅ BE-j7 chạy (socket ${cfg.j7Host}). Nuốt backlog initialTweets + ${WARMUP_MS / 1000}s warmup.`);
 
+  // tracker-sync: add pool account (watched ∩ pool) vào feed + lưu j7_list (cover main ∪ pool).
+  const sync = new TrackerSyncJ7({ feed, adminIds: cfg.adminIds });
+  sync.start(30000);
+  console.log("j7 tracker-sync: reconcile watched ∩ j7-list mỗi 30s (add/remove pool).");
+
   // keepalive: định kỳ validate token; server rotate (X-New-Token) -> lưu đè + áp reconnect.
   let keepaliveTimer = null;
   if (cfg.j7KeepaliveHours > 0) {
@@ -74,7 +80,7 @@ async function main() {
     keepaliveTimer = setInterval(tick, cfg.j7KeepaliveHours * 3600000);
   }
 
-  const shutdown = async () => { clearInterval(keepaliveTimer); feed.stop(); await close().catch(() => {}); process.exit(0); };
+  const shutdown = async () => { sync.stop(); clearInterval(keepaliveTimer); feed.stop(); await close().catch(() => {}); process.exit(0); };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 }
