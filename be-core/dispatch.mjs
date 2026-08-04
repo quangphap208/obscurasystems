@@ -92,8 +92,13 @@ export function makeDispatcher({ tg, getBotUser, warmupUntil = 0 }) {
             const tag = race.won ? `🏆 ${e.source || "?"}` : `dup ← ${race.firstSource}`;
             const gtag = gated ? " · ⏸cắt→bloom" : "";
             const head = `<b>[${e.source || "?"} · ${tag}${gtag}]</b> <code>${e.kind}${e.platform ? ":" + e.platform : ""}</code> @${handle}`;
-            const m = buildMessage(e, { botUser, deleteButton: false });
-            tg.send(cfg.monitorChat, { text: m ? head + "\n" + m.text : head, link_preview_options: m?.link_preview_options, reply_markup: m?.reply_markup });
+            if (gated) {
+              // j7 bị cắt + ĐÃ CHẶN (Bloom gửi bản đủ) -> KHÔNG show thân tin cắt (gây tưởng lỗi), chỉ ghi chú.
+              tg.send(cfg.monitorChat, { text: head + "\n<i>⤷ j7 bị cắt, đã chặn — Bloom đã gửi bản đầy đủ ✓</i>" });
+            } else {
+              const m = buildMessage(e, { botUser, deleteButton: false });
+              tg.send(cfg.monitorChat, { text: m ? head + "\n" + m.text : head, link_preview_options: m?.link_preview_options, reply_markup: m?.reply_markup });
+            }
           }
         } catch (err) { console.warn("[monitor]", err.message); }
       }
