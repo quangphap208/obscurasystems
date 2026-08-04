@@ -97,7 +97,12 @@ export function makeDispatcher({ tg, getBotUser, warmupUntil = 0 }) {
         tg.send(tgId, msg, { priority: e.kind === "deleted" });   // delete chen lên đầu hàng đợi
         sent++;
       }
-      if (sent) console.log(`[dispatch] ${e.kind} @${handle} -> ${sent} user`);
+      // In target cho follow/unfollow: 2 dòng "followed @actor" trông giống nhau có thể là 2 TARGET
+      // khác (lành tính) hay cùng target (dup) — thêm @target để tự phân biệt trong log.
+      if (sent) {
+        const extra = (e.kind === "followed" || e.kind === "unfollowed") && e.target ? ` → @${e.target}` : "";
+        console.log(`[dispatch] ${e.kind} @${handle}${extra} -> ${sent} user`);
+      }
     } catch (err) { console.warn("[dispatch]", err.message); }
   };
 }
