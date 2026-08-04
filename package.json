@@ -11,6 +11,7 @@
     "fe": "node fe/bot.mjs",
     "seed": "node scripts/seed.mjs",
     "inject": "node scripts/inject_event.mjs",
+    "clone": "node scripts/clone_db.mjs",
     "verify": "node scripts/verify_format.mjs"
   },
   "dependencies": {

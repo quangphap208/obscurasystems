@@ -21,7 +21,8 @@ if (cfg.mongoDb === "redacted_clone" && process.env.ALLOW_PROD !== "1") {
 }
 
 const [, , sub, ...rest] = process.argv;
-const fakeId = () => String(Date.now());
+const SRC = process.env.SRC || "test";              // nguồn giả: bloom | j7 | test (để test race/monitor)
+const idOf = () => process.env.TID || String(Date.now());   // TID cố định -> 2 nguồn CÙNG key -> test race
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 await connect();
@@ -56,24 +57,24 @@ const dispatch = makeDispatcher({ tg, getBotUser: () => me.username, warmupUntil
 let ev = null;
 if (sub === "tweet" || sub === "retweet" || sub === "quote") {
   const [handle, text] = rest;
-  ev = { kind: sub, actor: handle, authorId: null, content: text || "(test)", tweetId: fakeId(),
-    target: sub === "tweet" ? null : "someone", parentId: sub === "tweet" ? null : fakeId(), images: [], hasVideo: false, source: "test" };
+  ev = { kind: sub, actor: handle, authorId: null, content: text || "(test)", tweetId: idOf(),
+    target: sub === "tweet" ? null : "someone", parentId: sub === "tweet" ? null : idOf(), images: [], hasVideo: false, source: SRC };
 } else if (sub === "reply") {
   const [handle, target, text] = rest;
-  ev = { kind: "reply", actor: handle, authorId: null, content: text || "(test reply)", tweetId: fakeId(),
-    target: target || "someone", parentId: fakeId(), images: [], hasVideo: false, source: "test" };
+  ev = { kind: "reply", actor: handle, authorId: null, content: text || "(test reply)", tweetId: idOf(),
+    target: target || "someone", parentId: idOf(), images: [], hasVideo: false, source: SRC };
 } else if (sub === "platform") {
   const [platform, handle, text] = rest;
   if (!["truth", "ig"].includes(platform)) { console.error("platform phải là truth|ig"); process.exit(1); }
   ev = { kind: "platform", platform, sub: "post", actor: handle, authorId: null, content: text || "(test post)",
-    postId: fakeId(), postUrl: platform === "truth" ? `https://truthsocial.com/@${handle}` : `https://instagram.com/${handle}`,
-    target: null, images: [], hasVideo: false, thumb: null, source: "test" };
+    postId: idOf(), postUrl: platform === "truth" ? `https://truthsocial.com/@${handle}` : `https://instagram.com/${handle}`,
+    target: null, images: [], hasVideo: false, thumb: null, source: SRC };
 } else {
   console.error("Lệnh: tweet|reply|retweet|quote|platform | seed-platlist | seed-user. Xem đầu file.");
   process.exit(1);
 }
 
-console.log(`[inject] DB=${cfg.mongoDb} bot=@${me.username} kind=${ev.kind}${ev.platform ? ":" + ev.platform : ""} @${ev.actor}`);
+console.log(`[inject] DB=${cfg.mongoDb} bot=@${me.username} src=${SRC} id=${ev.tweetId || ev.postId} kind=${ev.kind}${ev.platform ? ":" + ev.platform : ""} @${ev.actor}`);
 await dispatch(ev);
 await sleep(5000);   // chờ hàng đợi Telegram drain (1.1s/tin)
 await close();
