@@ -6,6 +6,7 @@
 
 - **Entry:** [`be/engine.mjs`](../be/engine.mjs) — `npm run be` / pm2 `kol-be`
 - **Phụ thuộc:** Playwright (Chromium thật — qua quantum PoW của Bloom), MongoDB Atlas, Telegram Bot API (chỉ để **gửi**).
+- **⚠️ Nay là 1 trong 2 nguồn:** tầng render/dedup/gửi đã tách ra [`be-core/`](../be-core) dùng chung với BE j7. Bức tranh dual-source (routing, race, source-preference, auth) ở **[ARCHITECTURE_DUAL_BE.md](ARCHITECTURE_DUAL_BE.md)**.
 
 ```mermaid
 flowchart TD
@@ -33,13 +34,13 @@ flowchart TD
 |---|---|
 | [`be/engine.mjs`](../be/engine.mjs) | Entry. Bật pool + dispatcher + tracker-sync + profile-poller + rollup `user_stats` (60s). Warmup nuốt backlog. |
 | [`be/pool.mjs`](../be/pool.mjs) | `BloomShard` = 1 Playwright persistent context / tài khoản Bloom; patch `JSON.parse` để tap frame WS. `BloomPool` quản N shard. |
-| [`be/lib/format.mjs`](../be/lib/format.mjs) | `normalize(frame)` → event thống nhất; `buildMessage(e)` → `{text, link_preview_options, reply_markup}`; `makeProfileEvent`. |
-| [`be/dispatcher.mjs`](../be/dispatcher.mjs) | event → watchers → lọc settings/media → dedup → gửi DM. |
+| [`be/normalize.mjs`](../be/normalize.mjs) | `normalize(frame)` → canonical event (phần RIÊNG Bloom). `buildMessage`/`makeProfileEvent` nay ở [`be-core/message.mjs`](../be-core/message.mjs). |
+| [`be-core/dispatch.mjs`](../be-core/dispatch.mjs) | (DÙNG CHUNG) event → watchers → lọc settings/media → gate → dedup → gửi DM. |
 | [`be/tracker-sync.mjs`](../be/tracker-sync.mjs) | Reconcile `union(watches.handle)` ↔ pool Bloom. Self-heal + exclusive. |
 | [`be/profile-poller.mjs`](../be/profile-poller.mjs) | Dò đổi avatar/name/verified (feed-driven + poll). |
-| [`be/tweet-cache.mjs`](../be/tweet-cache.mjs) | `rememberTweet` / `enrichDelete` (render tin đã xoá). |
+| [`be-core/tweet-cache.mjs`](../be-core/tweet-cache.mjs) | (DÙNG CHUNG) `rememberTweet` / `enrichDelete` (render tin đã xoá). |
 | [`be/lib/tsunami.mjs`](../be/lib/tsunami.mjs) | Client REST mã hoá của Bloom (AES-256-GCM). |
-| [`be/lib/telegram.mjs`](../be/lib/telegram.mjs) | Sender: hàng đợi per-chat + rate-limit + retry. |
+| [`be-core/telegram.mjs`](../be-core/telegram.mjs) | (DÙNG CHUNG) Sender: hàng đợi per-chat + rate-limit + retry. |
 
 ---
 
@@ -152,5 +153,5 @@ thiếu tự lấy default. `effectiveSettings` = override của watch nếu có
 - **Session Bloom ~30 ngày hết hạn** → shard `expired`, alert admin; đổi token → `scripts/reset_source.mjs` → restart.
 - **Quantum PoW cần Chromium thật** → mỗi shard ≈ 400MB RAM; giới hạn số shard theo VPS.
 - **Atlas hiccup** → sender/Mongo có retry; nếu vẫn crash thì pm2 restart.
-- **5 feature Bloom không phát** (pins/unpins/spaces/trending×2) → gate ở FE, không hứa.
+- **pins/unpins** nay do **nguồn j7** cấp (xem [ARCHITECTURE_DUAL_BE.md](ARCHITECTURE_DUAL_BE.md)); **spaces/trending×2** không nguồn nào phát → vẫn gate ở FE.
 - Chạy **1 BE duy nhất** trên 1 DB (2 BE = gửi noti 2 lần, track chồng).
