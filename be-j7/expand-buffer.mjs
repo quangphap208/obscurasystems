@@ -6,8 +6,8 @@
 // expansion khi tới (huỷ bản cắt). Expansion không tới -> gửi bản cắt (fallback, gate lo nhường Bloom).
 // Tweet KHÔNG cắt -> gửi NGAY (không trễ). `dispatched` TTL 60s: bỏ expansion tới trễ của tweet đã gửi
 // (tránh dup do reclassify type: tweet:id vs quote:id là 2 dedupKey khác nhau).
+import { J7_TRUNCATED } from "../be-core/events.mjs";
 const WAIT_MS = 3000;
-const TRUNC = /…\s*$|(?:x|twitter)\.com\/i\/web\/status\//i;
 
 export function makeExpandBuffer({ dispatch }) {
   const pending = new Map();     // tweetId -> timer (bản cắt đang đợi expansion)
@@ -24,8 +24,10 @@ export function makeExpandBuffer({ dispatch }) {
     tweet(ev, raw) {
       const id = ev.tweetId;
       if (!id) return dispatch(ev);
-      const truncated = TRUNC.test(ev.content || "") || TRUNC.test(raw?.text || "");
-      if (!truncated) { markSent(id); return dispatch(ev); }   // đủ -> gửi ngay
+      // RETWEET: LUÔN đợi expansion (bản đầu luôn hiển thị tweet gốc bị cắt + media rỗng, bất kể form text).
+      // Còn lại: đợi nếu text CÓ dấu cắt (…/.../i-web-status/link-quote) — quote bị misclassify thành tweet.
+      const incomplete = ev.kind === "retweet" || J7_TRUNCATED.test(ev.content || "") || J7_TRUNCATED.test(raw?.text || "");
+      if (!incomplete) { markSent(id); return dispatch(ev); }   // đủ -> gửi ngay
       cancelPending(id);
       pending.set(id, setTimeout(() => { pending.delete(id); markSent(id); dispatch(ev); }, WAIT_MS));  // hết giờ -> gửi bản cắt
     },

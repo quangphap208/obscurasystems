@@ -5,7 +5,7 @@ import * as repo from "../shared/repo.mjs";
 import { cfg } from "../shared/config.mjs";
 import { KIND_TO_COL } from "../shared/settings.mjs";
 import { buildMessage } from "./message.mjs";
-import { dedupKey } from "./events.mjs";
+import { dedupKey, J7_TRUNCATED } from "./events.mjs";
 import { rememberTweet, enrichDelete } from "./tweet-cache.mjs";
 
 // Field profile mà j7 SỞ HỮU (map từ 6 field j7). verified_badge/handle KHÔNG ở đây -> Bloom vẫn giữ.
@@ -15,8 +15,7 @@ const J7_PROFILE_FIELDS = new Set(["screenname", "bio", "geo", "profile_picture"
 // tweet rồi chèn self-link `i/web/status/<id>`, video tới sau qua `tweet_update` (cả build-bot lẫn j7-kol
 // đều drop). Không field nào chứa bản đầy đủ. -> Nếu j7 bị cắt VÀ Bloom đang track handle: BỎ bản j7,
 // nhường Bloom (đầy đủ). j7 vẫn thắng (first-send) khi data sạch. Bloom không cover -> vẫn nhận bản j7.
-const J7_TWEET_KINDS = new Set(["tweet", "retweet", "quote", "reply"]);
-const J7_TRUNCATED = /(?:x|twitter)\.com\/i\/web\/status\//i;
+const J7_TWEET_KINDS = new Set(["tweet", "retweet", "quote", "reply"]);   // J7_TRUNCATED: dùng chung từ events.mjs
 
 // Cache j7-coverage refresh 60s. CHỈ tin `main` (main-feed): response j7 trả main TƯƠI mỗi lần nên
 // account bị j7 drop -> rớt khỏi main ngay -> gate nhả -> Bloom bù. KHÔNG dùng `pool`: pool gồm

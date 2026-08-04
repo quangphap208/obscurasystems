@@ -11,3 +11,9 @@ export function dedupKey(e) {
   if (e.kind === "platform") return `plat:${e.platform}:${e.postId}`;   // Truth/IG (chỉ j7, không race)
   return `${e.kind}:${e.tweetId}`;
 }
+
+// Dấu hiệu snapshot tweet j7 CHƯA đủ (bản `tweet` đầu; bản đủ đến qua tweet_update isExpandedUpdate).
+// Nhiều FORM cắt (đã gặp thực tế): kết thúc "…"(U+2026) hoặc "..."(ASCII); chèn self-link note-tweet
+// `i/web/status`; hoặc kết thúc = link tweet được quote `<handle>/status/<id>` (quote bị misclassify
+// thành TWEET). Dùng CHUNG: expand-buffer (đợi expansion) + dispatch gate (fallback nhường Bloom).
+export const J7_TRUNCATED = /…\s*$|\.\.\.\s*$|(?:x|twitter)\.com\/i\/web\/status\/|(?:x|twitter)\.com\/[^\/\s]+\/status\/\d+\s*$/i;
