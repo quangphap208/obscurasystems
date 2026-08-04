@@ -28,9 +28,34 @@ export function welcomeScreen(user, nWatched, botUser) {
   if (expired) text += `\n\n⚠️ Your plan has expired. Use /subscribe to purchase a plan to continue using the service.`;
   const keyboard = new InlineKeyboard()
     .text("👀 X accounts", "viewAccounts").row()
+    .text("🟣 Truth Social", "platmenu:truth").text("📸 Instagram", "platmenu:ig").row()
     .text("👥 Referrals", "referrals").row()
     .text("⚙️ Global Settings", "globalsettings");
   return { text, keyboard };
+}
+
+// 🟣📸 Truth/IG picker — master enable + chọn account từ list global (BE capture vào j7_platform).
+const PLAT_META = { truth: { emoji: "🟣", name: "Truth Social" }, ig: { emoji: "📸", name: "Instagram" } };
+export function platformScreen(platform, enabled, globalList, followed) {
+  const m = PLAT_META[platform] || { emoji: "❓", name: platform };
+  const kb = new InlineKeyboard();
+  kb.text(`${enabled ? "✅" : "❌"} Enable ${m.name}`, `plat:en:${platform}`).row();
+  let text = `${m.emoji} <b>${m.name}</b>\n\n`;
+  if (!enabled) {
+    text += `Turn on <b>Enable ${m.name}</b> to receive posts from the accounts you follow below.\n\n` +
+      `<i>Currently OFF — you won't get ${m.name} notifications.</i>`;
+  } else if (!globalList.length) {
+    text += `No ${m.name} accounts available yet. Check back later.`;
+  } else {
+    text += `Tap to follow / unfollow. ✅ = you'll get their ${m.name} posts.\n` +
+      `<b>${followed.size}</b>/${globalList.length} followed.`;
+    for (const h of globalList) {
+      const on = followed.has(String(h).toLowerCase());
+      kb.text(`${on ? "✅" : "➕"} ${h}`, `plat:pk:${platform}:${h}`).row();
+    }
+  }
+  kb.text("⬅️ Back", "home").text("ⓧ Close", "close");
+  return { text, keyboard: kb };
 }
 
 // #5 Referral

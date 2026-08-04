@@ -49,10 +49,47 @@ function buildProfileBody(field, oldV, newV) {
   return lines.join("\n");
 }
 
+// Post nền tảng ngoài X (Truth Social / Instagram, kind="platform"). Link gốc của nền tảng, KHÔNG fxtwitter.
+const PLAT = {
+  truth: { emoji: "🟣", verb: "posted on Truth",     btn: "View on Truth" },
+  ig:    { emoji: "📸", verb: "posted on Instagram", btn: "View on Instagram" },
+};
+function buildPlatformMessage(e, { deleteButton = true } = {}) {
+  const p = PLAT[e.platform]; if (!p) return null;
+  const author = e.actor, target = e.target;
+  const nPhotos = (e.images || []).length, video = !!e.hasVideo;
+  const pre = (video ? "🎥" : "🖼️".repeat(nPhotos)) + p.emoji;
+
+  let head;
+  if (e.platform === "truth" && e.sub === "retweet")
+    head = `${pre} <b>${esc(author)}</b> <code>reTruthed</code>` + (target ? ` <b>${esc(target)}</b>` : "");
+  else if (e.platform === "truth" && e.sub === "quote")
+    head = `${pre} <b>${esc(author)}</b> <b>Quoted</b>` + (target ? ` <b>${esc(target)}</b>` : "");
+  else if (e.platform === "truth" && e.sub === "reply")
+    head = `${pre} <b>${esc(author)}</b> <code>Replied To</code>` + (target ? ` <b>${esc(target)}</b>` : "");
+  else
+    head = `${pre} <b>${esc(author)}</b> ${p.verb}`;
+
+  let body = e.content || "";
+  if (e.platform === "truth" && e.sub === "reply") body = body.replace(/^(?:@[A-Za-z0-9_.]+\s+)+/, "");
+  const text = head + (e.sub === "post" ? "\n" : "\n\n") + esc(body);
+
+  // preview: ảnh/thumbnail tĩnh trực tiếp -> else Telegram unfurl link post -> else tắt.
+  const lpo = e.thumb ? { url: e.thumb, show_above_text: true, prefer_large_media: true }
+    : e.postUrl ? { url: e.postUrl, show_above_text: true, prefer_large_media: true }
+    : { is_disabled: true };
+
+  const row = [];
+  if (deleteButton) row.push({ text: "🗑 Delete", callback_data: "del" });
+  if (e.postUrl) row.push({ text: p.btn, url: e.postUrl });
+  return { text, link_preview_options: lpo, reply_markup: row.length ? { inline_keyboard: [row] } : undefined };
+}
+
 // Dựng { text(HTML), link_preview_options, reply_markup } cho Bot API.
 // deleteButton: hiện nút 🗑 Delete (setting delete_button; mặc định bật).
 export function buildMessage(e, { botUser, deleteButton = true } = {}) {
   const k = e.kind;
+  if (k === "platform") return buildPlatformMessage(e, { deleteButton });
   const meta = ACT[k]; if (!meta) return null;
   const [emoji, verb, sep] = meta;
   const author = e.actor, target = e.target;

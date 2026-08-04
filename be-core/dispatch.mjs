@@ -59,12 +59,14 @@ export function makeDispatcher({ tg, getBotUser, warmupUntil = 0 }) {
       if (e.source !== "j7" && e.kind === "profileChanges" && J7_PROFILE_FIELDS.has(e.field) && await isJ7Covered(handle)) return;
       if (Date.now() < warmupUntil) return;            // nuốt backlog lúc mới connect
 
-      const colKey = KIND_TO_COL[e.kind];
+      // platform (Truth/IG): colKey = platform (settings.truth/ig), watcher lọc theo platform-watch.
+      const isPlat = e.kind === "platform";
+      const colKey = isPlat ? e.platform : KIND_TO_COL[e.kind];
       if (!colKey) return;                              // loại không map (vd pins) -> bỏ
 
       const key = dedupKey(e);
       const botUser = getBotUser();
-      const watchers = await repo.watchersOfHandle(handle);
+      const watchers = await repo.watchersOfHandle(handle, isPlat ? e.platform : "x");
       let sent = 0;
       for (const { tgId, settings } of watchers) {
         if (!settings[colKey]) continue;                // user tắt loại này

@@ -8,8 +8,20 @@ import { byKey, GATE_TEXT } from "../shared/settings.mjs";
 import { resolveHandle, parseHandle } from "./xsearch.mjs";
 import {
   welcomeScreen, referralScreen, globalSettingsScreen, accountSettingsScreen,
-  accountsScreen, subscribeScreen, esc,
+  accountsScreen, subscribeScreen, platformScreen, esc,
 } from "./screens.mjs";
+
+const PLATFORMS = new Set(["truth", "ig"]);
+// Màn picker Truth/IG: master enable + list global (BE capture) + đánh dấu account user đang follow.
+async function showPlatform(ctx, platform, edit = false) {
+  if (!PLATFORMS.has(platform)) return;
+  const uid = ctx.from.id;
+  const enabled = !!(await repo.getGlobalSettings(uid))[platform];
+  const pl = await repo.getJ7Platforms();
+  const globalList = (platform === "truth" ? pl?.truth : pl?.ig) || [];
+  const followed = await repo.platformWatchSet(uid, platform);
+  await show(ctx, platformScreen(platform, enabled, globalList, followed), edit);
+}
 
 assertFE();
 await connect();
@@ -237,6 +249,28 @@ bot.on("callback_query:data", async (ctx) => {
       const rest = data.slice(3); const i = rest.indexOf(":");
       const handle = rest.slice(0, i), key = rest.slice(i + 1);
       return toggle(ctx, byKey[key], { type: "w", handle });
+    }
+    if (data.startsWith("platmenu:")) { await showPlatform(ctx, data.slice(9), true); return ctx.answerCallbackQuery(); }
+    if (data.startsWith("plat:en:")) {                 // master enable Truth/IG
+      const p = data.slice(8);
+      if (PLATFORMS.has(p)) {
+        const cur = (await repo.getGlobalSettings(uid))[p];
+        await repo.setGlobalSetting(uid, p, cur ? 0 : 1);
+        await showPlatform(ctx, p, true);
+        return ctx.answerCallbackQuery(cur ? "Disabled" : "Enabled");
+      }
+      return ctx.answerCallbackQuery();
+    }
+    if (data.startsWith("plat:pk:")) {                 // follow/unfollow 1 account platform
+      const rest = data.slice(8); const i = rest.indexOf(":");
+      const p = rest.slice(0, i), h = rest.slice(i + 1);
+      if (PLATFORMS.has(p) && h) {
+        const set = await repo.platformWatchSet(uid, p);
+        if (set.has(h.toLowerCase())) await repo.removePlatformWatch(uid, h, p);
+        else await repo.addPlatformWatch(uid, h, p);
+        await showPlatform(ctx, p, true);
+      }
+      return ctx.answerCallbackQuery();
     }
     return ctx.answerCallbackQuery();
   } catch (e) {

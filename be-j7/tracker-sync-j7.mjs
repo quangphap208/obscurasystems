@@ -48,6 +48,9 @@ export class TrackerSyncJ7 {
       const pool = [...new Set([...avail, ...this.added])];       // universe pool = chưa-add ∪ đã-add
       const universe = new Set([...main, ...pool]);
       await repo.saveJ7List({ main, pool });                     // cho gate isJ7Covered (M4)
+      // Capture list global Truth/IG (đến free cùng response) cho FE picker (M5).
+      const truth = handles(r.truth?.accounts), ig = handles(r.ig?.accounts);
+      if (truth.length || ig.length) await repo.saveJ7Platforms({ truth, ig });
 
       const desired = new Set(await repo.distinctHandles());
       const needAdd = [...desired].filter((h) => availSet.has(h));                        // pool, chưa stream

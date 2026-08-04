@@ -16,7 +16,8 @@ const urls = (arr) => (arr || []).map((m) => (typeof m === "string" ? m : m && m
 // entry: map kind (từ j7feed.onEvent) -> canonical event | null
 export function normalizeJ7(raw, kind) {
   if (!raw || typeof raw !== "object") return null;
-  if (kind === "update" || kind === "external") return null;        // edit / multi-platform: bỏ
+  if (kind === "update") return null;                               // edit metrics: bỏ
+  if (kind === "external") return normPlatform(raw);                // post Truth/IG -> canonical platform
   if (kind === "affiliation") return null;                          // affiliation vẫn để Bloom lo (không double-fire)
   if (kind === "profile") return normProfile(raw);                  // -> MẢNG profileChanges (j7 làm chủ)
   if (kind === "deleted") return normDelete(raw);
@@ -119,6 +120,37 @@ function normLifecycle(raw, kind) {
   const actor = u.handle || null;
   if (!actor) return null;
   return { kind, undo: false, authorId: u.id ? String(u.id) : null, actor, content: "", images: [], hasVideo: false };
+}
+
+// external_message -> post Truth Social / Instagram. Chỉ nhận truth/ig (BinanceSquare/CoinCommunity bỏ).
+function normPlatform(raw) {
+  const platform = raw.isTruthSocial ? "truth" : raw.isInstagram ? "ig" : null;
+  if (!platform) return null;
+  const a = raw.author || {};
+  const images = urls(raw.media && raw.media.images);
+  const videos = urls(raw.media && raw.media.videos);
+  const thumbs = urls(raw.media && raw.media.thumbnails);
+  // Truth có subtype (như X). IG luôn "post".
+  let sub = "post", target = null;
+  if (platform === "truth") {
+    const t = String(raw.truthSocialPostType || "POST").toUpperCase();
+    if (t === "RETWEET")    { sub = "retweet"; target = raw.retweetedUser || raw.originalAuthor?.handle || null; }
+    else if (t === "QUOTE") { sub = "quote";   target = raw.quotedUser   || null; }
+    else if (t === "REPLY") { sub = "reply";   target = raw.repliedToUser || null; }
+  }
+  const content = raw.text || (sub === "retweet" ? (raw.originalTweetText || "") : "");
+  return {
+    kind: "platform", platform, sub,
+    authorId: a.id ? String(a.id) : null,
+    actor: a.handle || null, actorName: a.name || "",
+    content,
+    postId: raw.id ? String(raw.id) : null,
+    postUrl: platform === "truth" ? (raw.truthSocialUrl || null) : (raw.instagramUrl || null),
+    target,
+    images, hasVideo: videos.length > 0,
+    thumb: images[0] || thumbs[0] || null,   // ảnh/thumbnail tĩnh làm preview (video IG/Truth đến async, bỏ)
+    createdAt: raw.createdAt || null,
+  };
 }
 
 // profile_update -> MẢNG profileChanges (1 event / field đổi), map j7 field -> vocab canonical (Bloom)

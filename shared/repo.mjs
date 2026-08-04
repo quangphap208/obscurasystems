@@ -14,7 +14,11 @@ import { DEFAULTS, byCol } from "./settings.mjs";
 import { cfg } from "./config.mjs";
 
 const SET_COLS = Object.keys(DEFAULTS);
-const wid = (tgId, handle) => `${tgId}:${handle.toLowerCase()}`;
+// _id watch: X giữ `tg:handle` (khỏi migrate); platform khác (truth/ig) dùng `tg:platform:handle`.
+const wid = (tgId, handle, platform = "x") =>
+  platform === "x" ? `${tgId}:${handle.toLowerCase()}` : `${tgId}:${platform}:${handle.toLowerCase()}`;
+// Lọc watch X (doc cũ không có field platform -> coi là "x"). Để platform watch KHÔNG lọt vào flow X.
+const X_ONLY = { $or: [{ platform: "x" }, { platform: { $exists: false } }] };
 const settingsOf = (obj) => Object.fromEntries(SET_COLS.map((c) => [c, obj?.[c] ?? DEFAULTS[c]]));
 
 // ---------- users ----------
@@ -64,9 +68,9 @@ export async function setGlobalSetting(tgId, colName, val) {
 }
 
 // ---------- watches ----------
-export async function listWatches(tgId) { return col("watches").find({ tg_id: Number(tgId) }).sort({ created_at: 1 }).toArray(); }
+export async function listWatches(tgId) { return col("watches").find({ tg_id: Number(tgId), ...X_ONLY }).sort({ created_at: 1 }).toArray(); }
 export async function getWatch(tgId, handle) { return col("watches").findOne({ _id: wid(tgId, handle) }); }
-export async function countWatches(tgId) { return col("watches").countDocuments({ tg_id: Number(tgId) }); }
+export async function countWatches(tgId) { return col("watches").countDocuments({ tg_id: Number(tgId), ...X_ONLY }); }
 
 // Thêm watch. settings=null => KẾ THỪA global; chỉ tạo override khi user chỉnh riêng
 // account (setWatchSetting). Nhờ vậy bật/tắt ở Global Settings áp cho mọi account chưa customize.
@@ -75,7 +79,7 @@ export async function addWatch(tgId, handle, xUserId = null) {
   const h = handle.toLowerCase().replace(/^@/, "");
   await col("watches").updateOne(
     { _id: wid(tgId, h) },
-    { $setOnInsert: { tg_id: tgId, handle: h, x_user_id: xUserId, settings: null, created_at: now() } },
+    { $setOnInsert: { tg_id: tgId, handle: h, platform: "x", x_user_id: xUserId, settings: null, created_at: now() } },
     { upsert: true });
   return getWatch(tgId, h);
 }
@@ -100,8 +104,9 @@ export async function effectiveSettings(tgId, handle) {
 }
 
 // Dispatcher: mọi user watch handle + settings hiệu lực (batch fetch settings user thiếu override).
-export async function watchersOfHandle(handle) {
-  const rows = await col("watches").find({ handle: handle.toLowerCase() }).project({ tg_id: 1, settings: 1 }).toArray();
+export async function watchersOfHandle(handle, platform = "x") {
+  const q = platform === "x" ? { handle: handle.toLowerCase(), ...X_ONLY } : { handle: handle.toLowerCase(), platform };
+  const rows = await col("watches").find(q).project({ tg_id: 1, settings: 1 }).toArray();
   const needUser = rows.filter((r) => !r.settings).map((r) => r.tg_id);
   let userSettings = {};
   if (needUser.length) {
@@ -111,8 +116,28 @@ export async function watchersOfHandle(handle) {
   return rows.map((r) => ({ tgId: r.tg_id, settings: r.settings ? settingsOf(r.settings) : (userSettings[r.tg_id] || { ...DEFAULTS }) }));
 }
 
-export async function distinctHandles() { return col("watches").distinct("handle"); }
-export async function refCount(handle) { return col("watches").countDocuments({ handle: handle.toLowerCase() }); }
+export async function distinctHandles() { return col("watches").distinct("handle", X_ONLY); }
+export async function refCount(handle) { return col("watches").countDocuments({ handle: handle.toLowerCase(), ...X_ONLY }); }
+
+// ---------- platform watches (Truth/IG — nguồn j7, list global admin-curated) ----------
+// User bật master settings.truth/ig + chọn account cụ thể (platform watch). Dispatcher giao post
+// platform theo handle CHO user có watch platform đó + đã bật. Tách _id nên KHÔNG lẫn flow X.
+export async function addPlatformWatch(tgId, handle, platform) {
+  tgId = Number(tgId);
+  const h = handle.toLowerCase().replace(/^@/, "");
+  await col("watches").updateOne(
+    { _id: wid(tgId, h, platform) },
+    { $setOnInsert: { tg_id: tgId, handle: h, platform, x_user_id: null, settings: null, created_at: now() } },
+    { upsert: true });
+}
+export async function removePlatformWatch(tgId, handle, platform) {
+  const r = await col("watches").deleteOne({ _id: wid(tgId, handle, platform) });
+  return r.deletedCount > 0;
+}
+export async function platformWatchSet(tgId, platform) {
+  const rows = await col("watches").find({ tg_id: Number(tgId), platform }).project({ handle: 1 }).toArray();
+  return new Set(rows.map((r) => r.handle));
+}
 export async function xidForHandle(handle) {
   const r = await col("watches").findOne({ handle: handle.toLowerCase(), x_user_id: { $ne: null } }, { projection: { x_user_id: 1 } });
   return r?.x_user_id || null;
@@ -191,6 +216,11 @@ export async function saveJ7List({ main = [], pool = [] } = {}) {
   await col("j7_list").updateOne({ _id: "__j7list__" }, { $set: { main, pool, updated_at: now() } }, { upsert: true });
 }
 export async function getJ7List() { return col("j7_list").findOne({ _id: "__j7list__" }); }
+// List global Truth/IG (do tracker-sync-j7 capture free từ response) — cho FE hiện picker.
+export async function saveJ7Platforms({ truth = [], ig = [] } = {}) {
+  await col("j7_list").updateOne({ _id: "__platlist__" }, { $set: { truth, ig, updated_at: now() } }, { upsert: true });
+}
+export async function getJ7Platforms() { return col("j7_list").findOne({ _id: "__platlist__" }); }
 
 // ---------- user_stats (rollup: mỗi bot-user add bao nhiêu account X — phần "ngoài default") ----------
 // 1 doc / user + 1 doc "__totals__". Refresh định kỳ ở BE (engine) và có scripts/stats.mjs xem tay.
