@@ -67,10 +67,12 @@ export function makeDispatcher({ tg, getBotUser, warmupUntil = 0 }) {
 
       const key = dedupKey(e);
       const botUser = getBotUser();
+      const watchers = await repo.watchersOfHandle(handle, isPlat ? e.platform : "x");
 
-      // MONITOR firehose (TEST/QC): copy MỌI event (bỏ qua settings/watcher) + race-outcome vào channel.
-      // Cả 2 BE gọi -> mỗi nguồn 1 dòng; nguồn tới trước = 🏆, sau = dup←nguồn-thắng. buildMessage FULL.
-      if (cfg.monitorChat) {
+      // MONITOR firehose (TEST/QC): CHỈ handle CÓ user watch (theo watch-flow trong DB) — không bắn
+      // handle không ai theo (vd ~1300 default Bloom). Vẫn bỏ qua per-user settings ("raw"). Cả 2 BE
+      // gọi -> mỗi nguồn 1 dòng; nguồn tới trước = 🏆, sau = dup←winner. buildMessage FULL.
+      if (cfg.monitorChat && watchers.length) {
         try {
           const race = await repo.monitorMark(key, e.source);
           const tag = race.won ? `🏆 ${e.source || "?"}` : `dup ← ${race.firstSource}`;
@@ -79,8 +81,6 @@ export function makeDispatcher({ tg, getBotUser, warmupUntil = 0 }) {
           tg.send(cfg.monitorChat, { text: m ? head + "\n" + m.text : head, link_preview_options: m?.link_preview_options, reply_markup: m?.reply_markup });
         } catch (err) { console.warn("[monitor]", err.message); }
       }
-
-      const watchers = await repo.watchersOfHandle(handle, isPlat ? e.platform : "x");
       let sent = 0;
       for (const { tgId, settings } of watchers) {
         if (!settings[colKey]) continue;                // user tắt loại này
