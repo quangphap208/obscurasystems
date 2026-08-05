@@ -162,7 +162,7 @@ export function accountsScreen(watches) {
 
 // /subscribe — bảng gói (Free/Pro/Whale + pack). Giá lấy từ cfg. Xem docs/PAYMENT_RESEARCH.md §2.
 export function subscribeScreen(user, c) {
-  const crypto = !!(c.receiveSolAddress && c.solanaRpcUrl);   // chỉ nudge crypto khi đã bật
+  const crypto = c.receiveSolAddresses?.length > 0 && c.solanaRpcUrls?.length > 0;   // chỉ nudge crypto khi đã bật
   const text =
     `💎 <b>Subscribe</b>\n\n` +
     `<b>Free</b> — <b>${c.freeLimit}</b> accounts, forever. Basic tracking.\n\n` +

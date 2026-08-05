@@ -94,6 +94,34 @@ User /subscribe
 - **Late grace**: quá 30' vẫn khớp trong **24h** (tx chậm vẫn được cộng), sau đó mới nhả slot.
 - **Fallback**: giữ nút `/pay <txhash>` cho ca lệch số / user hỏi.
 
+### 4.1 Unique-amount → định danh ĐÚNG user khi nhiều tx cùng ví
+
+**Vấn đề:** nhiều user trả vào CÙNG ví → 1 ví nhận hàng loạt tx. Làm sao biết tx nào của ai?
+
+**Giải: số tiền = "mã hoá đơn".** Mỗi invoice pending lưu `{tg_id, kind, coin, address(ví), expect_base}`;
+`expect_base` (số base-unit) là **DUY NHẤT trong (coin, ví)**. Tx tới ví W, coin C, số = X base-units →
+tìm invoice `address=W & coin=C & expect_base=X` → ra ĐÚNG `tg_id` (ai) + `kind` (gói).
+
+Ví dụ (cùng 1 ví, USDC — cùng giá gốc vẫn không lẫn):
+| User | Gói | Số phải gửi |
+|---|---|---|
+| A (tg 111) | Pro | **15.001** |
+| B (tg 222) | Pro | **15.002** |
+| C (tg 333) | Whale | **40.001** |
+
+→ Tx **15.002** vào ví → chỉ khớp invoice **B** → credit đúng tg 222.
+
+**Đảm bảo:**
+- **Không trùng:** lúc tạo invoice, quét mọi invoice pending cùng (coin, ví) → chọn số lẻ CHƯA dùng (1..999). Hết 999 → báo bận (khó chạm; headroom ×số-ví ×3-coin).
+- **Khớp chính xác:** so số base-unit **NGUYÊN** (post−pre balance) == `expect_base` → không lệ thuộc float.
+- **Trả xong nhả số:** invoice → `paid`, số đó tái dùng cho invoice sau.
+- **Chống double-credit:** `claimInvoice` atomic (pending→paid 1 lần) + sig đã `seen` + ref-ledger `c:<sig>`.
+- **Nhiều ví:** số chỉ cần unique **trong 1 ví** → 2 ví khác nhau được trùng số (phân biệt bởi ví) → headroom ×số-ví.
+
+**Edge:**
+- User gửi **thiếu số lẻ** (vd 15.000) → không khớp invoice nào → không credit → dùng `/pay <sig>` / support. (Màn invoice nhấn mạnh "gửi ĐÚNG số".)
+- Trả **quá trễ >24h** (sau grace, số đã bị invoice mới tái dùng) → hiếm, có thể khớp nhầm → xử lý qua `/pay`/support. Trong 24h số vẫn được giữ (invoice còn pending) → an toàn.
+
 ---
 
 ## 5. File sẽ đụng + env cần điền
@@ -107,7 +135,7 @@ User /subscribe
 | `fe/screens.mjs` | màn chọn method/coin + màn "gửi X tới địa chỉ Y" |
 | `.env.example` | biến mới |
 
-**Env cần cung cấp:** `RECEIVE_SOL_ADDRESS` (nhận cả USDC-SPL + SOL, cùng 1 ví), `SOLANA_RPC_URL` = **endpoint Infura Solana** (`https://solana-mainnet.infura.io/v3/<API_KEY>`), `INFURA_API_KEY`.
+**Env cần cung cấp (hỗ trợ NHIỀU — CSV):** `RECEIVE_SOL_ADDRESS` = 1+ ví nhận (USDC/USDT-SPL + SOL), `addr1,addr2,…` — invoice tự spread sang ví ít pending nhất (tăng headroom unique-amount/ví). `SOLANA_RPC_URL` = 1+ endpoint Infura `https://solana-mainnet.infura.io/v3/<KEY>`, `url1,url2` — **round-robin + failover** (né rate-limit). Key nằm trong URL (không cần biến riêng).
 **Mặc định sẽ dùng:** window **30'** hiển thị · match trễ **24h** · poll **~25s** · Solana RPC **Infura** (`getSignaturesForAddress` + `getTransaction` jsonParsed → đọc pre/post token balances match USDC/USDT-SPL/SOL) · giá SOL **Jupiter price API** (khoá lúc tạo invoice) · mint chuẩn: **USDC-SPL** `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` + **USDT-SPL** `Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB`.
 
 ---
@@ -222,3 +250,5 @@ rate-limit/độ trễ · support · add-on module bán rời.
 - **2026-08-05 (v3.2)** — Nhận **3 coin trên Solana: USDC-SPL + USDT-SPL + SOL**. Quy đổi: stablecoin 1:1 USD; SOL = USD÷giá SOL (Jupiter, khoá 30'). **Credit tier + ref points theo `invoice.priceUSD`** (không dùng số token thực nhận). Match phân biệt theo **mint** (USDC vs USDT). Thêm mint USDT-SPL vào §5. Cập nhật §3/§4/§6.4.
 - **2026-08-05 (v3.3)** — Chốt 3 prereq: **Pack one-time đến hết hạn tier** (§6.1); **giá pack $6/+10** (§6.6); **đồng hồ** buyer mới từ lần add đầu / nâng cấp từ ngày payment (§6.5). Tất cả §6 giờ đã CHỐT trừ ví Solana + Infura key (secrets, để `.env`). Sẵn sàng code Phase 1 (Stars tier restructure, không cần secrets).
 - **2026-08-05 (v3.4)** — **Đơn giản hoá đồng hồ:** gói trả phí LUÔN tính từ **ngày mua** (bỏ nhánh "từ lần add đầu"). Free vẫn vĩnh viễn (không đồng hồ). → Phase 1 khỏi cần trạng thái pending-start, gọn code hơn.
+- **2026-08-05 (code)** — **Phase 1** (2ac1f38, Stars tier Whale+Pack+applyPurchase) · **Phase 2** (4b1318b, crypto core `fe/crypto-pay.mjs`) · **Phase 3** (1a0ecff, UX /subscribe→method→coin→invoice + nudge "better price" + `/pay`). Còn Phase 4 = deploy .env + test live.
+- **2026-08-05 (v3.5)** — **NHIỀU ví + NHIỀU RPC** (CSV trong `RECEIVE_SOL_ADDRESS` / `SOLANA_RPC_URL`). RPC round-robin + failover (né rate-limit Infura); invoice spread sang ví ít pending nhất; unique-amount tính theo **(coin, VÍ)** → headroom ×số-ví; match theo (ví + mint + expect_base). `cfg.receiveSolAddress`→`receiveSolAddresses`, `solanaRpcUrl`→`solanaRpcUrls` (list). Bỏ `pendingExpectBases`.

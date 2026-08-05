@@ -101,11 +101,6 @@ export async function createCryptoInvoice({ tgId, kind, coin, mint, decimals, ex
 export async function listPendingInvoices(coin) {
   return col("crypto_invoices").find({ coin, status: "pending", dead_at: { $gte: now() } }).toArray();
 }
-// expect_base của các invoice pending cùng coin -> để cấp số lẻ KHÔNG trùng.
-export async function pendingExpectBases(coin) {
-  const rows = await col("crypto_invoices").find({ coin, status: "pending", dead_at: { $gte: now() } }).project({ expect_base: 1 }).toArray();
-  return new Set(rows.map((r) => r.expect_base));
-}
 // atomic: chỉ 1 lần pending->paid (chống double-credit; modifiedCount version-independent).
 export async function claimInvoice(id, sig) {
   const r = await col("crypto_invoices").updateOne({ _id: id, status: "pending" }, { $set: { status: "paid", matched_sig: sig, paid_at: now() } });
