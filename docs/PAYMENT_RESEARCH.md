@@ -38,7 +38,7 @@ mà bạn net bằng/hơn Stars; hợp audience crypto-native).
 **Đơn giá/acc:** Whale **$0.40** < Pro **$0.50** < Pack **$0.60** — mua sỉ rẻ nhất, cam kết nền vừa, top-up lẻ nhỉnh hơn (chuẩn ladder SaaS).
 
 - **Stars = USD × 1.3** ("nudge" sang crypto; bù một phần ~35% phí nền tảng). Crypto vẫn net > Stars → incentive đúng hướng. Muốn Stars net **bằng** crypto thì ×1.54.
-- ⏱ **Đồng hồ hết hạn gói trả phí:** buyer mới (0 acc) → từ **lần add đầu tiên**; nâng cấp (đã có acc) → từ **ngày payment**. (Xem §6.5.) Pack = **one-time**, hết theo tier (§6.1).
+- ⏱ **Đồng hồ hết hạn gói trả phí:** LUÔN từ **ngày mua** + số ngày gói (Free vĩnh viễn, không có đồng hồ). Pack = **one-time**, +10 acc tới khi tier hết hạn (§6.1).
 - `account_limit = tier_base + addon_packs×10`. Thêm field `users.addon_packs` (int).
 - **Pack breakpoint (pack $6):** cần >~**70 acc** thì lên Whale rẻ hơn (5 pack = $30, Pro+5pack $45 > Whale $40). Pack lo top-up 30–70 acc.
 - **Vẫn rẻ áp đảo:** 15–30 KOL rẻ hơn Redacted **50–75%**; 100 acc rẻ **80%**. Đơn giá $0.40–0.60/acc — rẻ nhất thị trường.
@@ -118,7 +118,7 @@ User /subscribe
 2. **✅ RPC provider — CHỐT: Infura** (Solana mainnet: `solana-mainnet.infura.io/v3/<key>`). Dùng `getSignaturesForAddress` + `getTransaction(jsonParsed)` để đọc pre/post token balances, tự parse (không cần enriched API kiểu Helius). (2026-08-05)
 3. **Ví nhận Solana** — đã có ví chưa (nhận cả USDC-SPL + SOL), hay để placeholder `FILL_ME`? *Chưa chốt.*
 4. **✅ Chain crypto — CHỐT: CHỈ SOLANA**, nhận **USDC-SPL + USDT-SPL + SOL native**. Bỏ Tron/ERC20 vì **fee thanh toán cao**. Stablecoin 1:1 USD, SOL quy đổi qua Jupiter (khoá 30'); credit theo `invoice.priceUSD`. (2026-08-05)
-5. **✅ Đồng hồ gói trả phí — CHỐT:** buyer **mới (0 acc lúc mua)** → tính từ **lần add đầu tiên** (pending tới khi add); **nâng cấp (đã có ≥1 acc lúc mua)** → tính từ **ngày payment**. (2026-08-05)
+5. **✅ Đồng hồ gói trả phí — CHỐT (đơn giản hoá):** LUÔN tính từ **ngày mua (payment)** + số ngày gói. Free = không có đồng hồ (vĩnh viễn). Bỏ nhánh "từ lần add đầu" (ca mua-trước-setup quá hiếm, không đáng thêm code + tránh đụng `isExpired`). (2026-08-05)
 6. **✅ Giá pack — CHỐT: $6/+10 acc** (~400⭐). (2026-08-05)
 
 ---
@@ -186,3 +186,4 @@ rate-limit/độ trễ · support · add-on module bán rời.
 - **2026-08-05 (v3.1)** — Chốt **RPC provider = Infura** (Solana mainnet `solana-mainnet.infura.io/v3/<key>`), thay Helius. Env: `SOLANA_RPC_URL` (endpoint Infura) + `INFURA_API_KEY`. Dò tx bằng `getSignaturesForAddress`+`getTransaction(jsonParsed)`, tự parse pre/post token balances. §6.2 chuyển "treo" → CHỐT.
 - **2026-08-05 (v3.2)** — Nhận **3 coin trên Solana: USDC-SPL + USDT-SPL + SOL**. Quy đổi: stablecoin 1:1 USD; SOL = USD÷giá SOL (Jupiter, khoá 30'). **Credit tier + ref points theo `invoice.priceUSD`** (không dùng số token thực nhận). Match phân biệt theo **mint** (USDC vs USDT). Thêm mint USDT-SPL vào §5. Cập nhật §3/§4/§6.4.
 - **2026-08-05 (v3.3)** — Chốt 3 prereq: **Pack one-time đến hết hạn tier** (§6.1); **giá pack $6/+10** (§6.6); **đồng hồ** buyer mới từ lần add đầu / nâng cấp từ ngày payment (§6.5). Tất cả §6 giờ đã CHỐT trừ ví Solana + Infura key (secrets, để `.env`). Sẵn sàng code Phase 1 (Stars tier restructure, không cần secrets).
+- **2026-08-05 (v3.4)** — **Đơn giản hoá đồng hồ:** gói trả phí LUÔN tính từ **ngày mua** (bỏ nhánh "từ lần add đầu"). Free vẫn vĩnh viễn (không đồng hồ). → Phase 1 khỏi cần trạng thái pending-start, gọn code hơn.
