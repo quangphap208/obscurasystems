@@ -57,6 +57,23 @@ chèn self-link; **delete trống nội dung**.
 
 Retweet có video: expansion ~140ms. → `WAIT_MS = 3000` thừa sức bắt.
 
+### 2.4 Đo lại 05-08-2026 (j7-kol-router) — ~19% tweet cắt KHÔNG BAO GIỜ có expansion
+
+2 phiên đo TOÀN feed (script trong `j7-kol-router/scripts/`): `truncation_stats.mjs` (300s) +
+`expansion_probe.mjs` (600s, 385 tweet live / 247 expansion):
+
+| (probe 600s, mature ≥30s) | tweet | reply | retweet | quote | tổng |
+|---|---|---|---|---|---|
+| bị cắt | 121 | 26 | 37 | 1 | 185 |
+| miss expansion (đợi đến hết phiên) | 19 | 7 | 8 | 1 | **35 (~19%)** |
+
+- **Delay expansion**: p50 ~145ms; chỉ 4/150 ca >3s, 2 ca >10s, max 20.1s → **nâng `WAIT_MS` chỉ vớt ~2-3%**,
+  không giải quyết được 19% miss.
+- **Miss CỤM THEO ACCOUNT** (fail cả burst): DHSgov 6 event liên tiếp, EmbamexEUA, GavinNewsom, MarioNawfal,
+  Zeneca, CNN, DailyMail, business, kanyewest…
+- **KẾT LUẬN**: các tweet này server j7 **không sinh expansion** (enrichment phía nguồn fail theo
+  account/burst) — đợi bao lâu cũng không tới. Không tự vá thì nhánh fallback GỬI BẢN CẮT là tất yếu (→ §8).
+
 ---
 
 ## 3. Giải pháp (đã triển khai)
@@ -100,8 +117,10 @@ Commit liên quan: `2c3ef3a` (retweet), `63b616e` (buffer), `fa4db7b` (retweet-a
 |---|---|
 | `[j7-buf] hold @X reply — đợi expansion (3000ms)` | Buffer giữ tweet cắt, chờ expansion |
 | `[j7-buf] @X expansion ✓ -> gửi bản ĐẦY ĐỦ (j7 tự render)` | ✅ **j7 tự render đầy đủ** — kết quả mong muốn |
-| `[j7-buf] @X KHÔNG có expansion sau 3000ms -> bản cắt (fallback -> gate/Bloom)` | Không expansion → fallback |
-| `[j7-gate] tweet cắt @X -> nhường Bloom (không gửi bản j7)` | Gate: bỏ bản j7 cắt, Bloom bù |
+| `[j7-buf] @X KHÔNG có expansion sau 3000ms -> bản cắt (fallback)` | Không expansion + KHÔNG có fxtwitter fallback → gửi bản cắt |
+| `[j7-fx] @X kind không expansion -> fxtwitter ✓ (bản đầy đủ)` | §8: fetch fxtwitter OK → gửi bản đầy đủ (hiện: j7-kol) |
+| `[j7-fx] @X kind không expansion, fxtwitter ✗ -> bản cắt (fallback)` | §8: fxtwitter fail → mới gửi bản cắt (hiện: j7-kol) |
+| `[j7-gate] tweet cắt @X -> nhường Bloom (không gửi bản j7)` | Gate (build-bot): bỏ bản j7 cắt, Bloom bù |
 
 **Delivery không hỏng** ở mọi nhánh: user luôn nhận bản đầy đủ (j7 tự render hoặc Bloom bù).
 
@@ -109,9 +128,8 @@ Commit liên quan: `2c3ef3a` (retweet), `63b616e` (buffer), `fa4db7b` (retweet-a
 
 ## 5. Chẩn đoán khi VẪN thấy `[j7-gate]` / `KHÔNG có expansion` nhiều
 
-Nghĩa là **session j7 không nhận `tweet_update`** (nhận `tweet` gốc nhưng thiếu bản enrichment).
 Code đã đúng (`be-j7/j7feed.mjs` line 40 subscribe `tweet_update`; engine xử lý `isExpandedUpdate`) →
-vấn đề nằm ở **session/account**, không phải code.
+nếu vẫn miss thì do **feed/account phía nguồn**, không phải code. Có 2 mức KHÁC nhau (đừng nhầm):
 
 Đếm để phân loại:
 ```
@@ -121,15 +139,19 @@ pm2 logs kol-be-j7 --lines 1000 --nostream | grep -c "KHÔNG có expansion"
 
 | Kết quả | Nguyên nhân | Fix |
 |---|---|---|
-| `expansion ✓` > 0 (nhiều) | Expansion CÓ tới, chỉ vài ca chậm/rớt lẻ | nâng `WAIT_MS` (3→6s) trong `be-j7/expand-buffer.mjs` |
+| `expansion ✓` > 0 (nhiều), fallback ~15-25% | **BÌNH THƯỜNG** — server không sinh expansion cho ~19% tweet cắt (§2.4). Nâng `WAIT_MS` chỉ vớt ~2-3% | fix triệt để → §8 |
 | `expansion ✓` = 0, fallback nhiều | Session **không nhận `tweet_update`** | ⬇ |
 
-### Session không nhận `tweet_update` — 2 khả năng
-1. **TRÙNG TOKEN**: `kol-be-j7` (build-bot) + `j7-kol-router` chạy cùng lúc với **cùng `J7_SESSION_TOKEN`**
-   → server j7 chỉ đẩy `tweet_update` cho 1 kết nối. → **Chỉ chạy 1 process / 1 tài khoản j7**, hoặc dùng
-   **2 tài khoản riêng**. (Account đã test — j7-kol — nhận 198 update/200s.)
-2. **Khác tier account**: token build-bot thuộc tài khoản không được cấp `tweet_update` → đổi sang tài
-   khoản có nhận (như account j7-kol đã test).
+### Session không nhận `tweet_update`
+
+> **CẢI CHÍNH 05-08-2026** — thực nghiệm `expansion_probe.mjs` (j7-kol-router):
+> mở **2 socket CÙNG token** song song 600s → cả 2 nhận **y hệt** 247/247 expansion (`onlyA = onlyB = 0`),
+> phase-1 trùng 383/385. Server **broadcast update cho MỌI kết nối** của account.
+> Giả thuyết cũ "trùng token → server chỉ đẩy `tweet_update` cho 1 kết nối" là **SAI** — chạy chung token
+> không gây miss (sự cố build-bot ngày trước nhiều khả năng do tier account, không phải trùng token).
+
+Nguyên nhân còn lại: **khác tier account** — token thuộc tài khoản không được cấp `tweet_update` →
+đổi sang tài khoản có nhận (như account j7-kol đã test: 198 update/200s).
 
 ---
 
@@ -150,3 +172,26 @@ Quy tắc: sửa phần render/normalize j7 nào thì áp cho **CẢ 2 repo**.
 - `be-j7/j7feed.mjs` — subscribe `tweet_update`
 - `be-core/events.mjs` — `J7_TRUNCATED` regex (dùng chung)
 - `be-core/dispatch.mjs` — quality-gate + monitor QC
+- `j7-kol-router/scripts/truncation_stats.mjs` — đo tỉ lệ cắt / expansion / delay trên toàn feed
+- `j7-kol-router/scripts/expansion_probe.mjs` — 2 socket cùng token: phân định miss do connection hay do server
+
+---
+
+## 8. Fix TRIỆT ĐỂ — fallback fetch fxtwitter (chốt 05-08-2026 · ✅ j7-kol-router · ⏳ build-bot)
+
+~19% miss là **từ nguồn và vĩnh viễn** (§2.4) → nhánh fallback phải **tự vá** thay vì gửi bản cắt:
+hết `WAIT_MS` không có expansion → `GET https://api.fxtwitter.com/status/<id>` → dựng lại event đầy đủ
+→ dispatch. fxtwitter lỗi/timeout → gửi bản cắt như cũ (**không tệ hơn hiện tại**).
+
+Đã verify bằng CHÍNH các tweet miss trong phiên đo 05-08-2026:
+- tweet @business bị cắt → fxtwitter trả **full text 380 ký tự**;
+- retweet @MartinShkreli (j7 cụt + media rỗng) → fxtwitter tự resolve về tweet **GỐC**
+  (`author: BrettHarrison`, `reposted_by: MartinShkreli`), full text **3 391 ký tự** (note-tweet);
+- API trả đủ `media.photos/videos`, `quote`, `replying_to`, `is_note_tweet` → sửa được text, media
+  lẫn **type sai** (tweet→quote).
+
+Tần suất fallback thực đo ~3.5 lần/phút toàn feed — nhẹ với API công khai (repo vốn đã dùng fxtwitter
+cho preview). **Trạng thái**: ✅ j7-kol-router (`lib/fxfetch.mjs` + `makeExpandBuffer({ fetchFull })` →
+hết `WAIT_MS` gọi `fetchFull(ev)`, fail mới gửi bản cắt); ⏳ **build-bot CHƯA có** —
+`be-j7/expand-buffer.mjs` chưa nhận `fetchFull` nên vẫn rơi vào gate/bản-cắt. Cần sync sang build-bot
+(quy tắc §6): thêm `be-j7/fxfetch.mjs` + truyền `fetchFull` vào buffer ở `be-j7/engine-j7.mjs`.
