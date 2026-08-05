@@ -43,6 +43,10 @@ export const cfg = {
   proDays: Number(process.env.PRO_DAYS || 30),
   proLimit: Number(process.env.PRO_LIMIT || 25),
   freeLimit: Number(process.env.FREE_LIMIT || 3),
+  // --- Referral: GHI NHẬN points (quy đổi thưởng định sau). Cộng ở 2 mốc: join + convert(payment). ---
+  refJoinPoints: Number(process.env.REF_JOIN_POINTS || 10),         // điểm khi 1 người MỚI join qua link
+  refPointsPerStar: Number(process.env.REF_POINTS_PER_STAR || 0.1), // điểm / 1 Star referred chi (Telegram XTR)
+  refPointsPerUsd: Number(process.env.REF_POINTS_PER_USD || 5),     // điểm / 1 USD referred chi qua crypto (USDT/SOL/ERC20)
   botLabel: process.env.BOT_LABEL || "🕶️ Obscura",
   supportContact: process.env.SUPPORT_CONTACT || "",   // vd @obscura_support (dùng cho /support)
   warmupMs: Number(process.env.WARMUP_MS || 12000),

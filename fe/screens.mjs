@@ -96,7 +96,8 @@ export function referralScreen(botUser, tgId, stats) {
     `• Subscribed: <b>${stats.subscribed}</b>\n` +
     `• Earned: <b>${stats.points}</b> Points\n\n` +
     `<b>🔗 Tap To Copy Referral Link</b>\n` +
-    `<code>https://t.me/${botUser}?start=${tgId}</code>`;
+    `<code>https://t.me/${botUser}?start=${tgId}</code>\n\n` +
+    `<i>Earn points on every friend who joins & upgrades. Rewards coming soon.</i>`;
   const keyboard = new InlineKeyboard().text("⬅️ Back", "home").text("ⓧ Close", "close");
   return { text, keyboard };
 }

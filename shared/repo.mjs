@@ -5,6 +5,7 @@
 //   users{_id=tg_id, tg_id, username, tier, account_limit, expires_at, referred_by, points, created_at, settings{20 khoá}}
 //   watches{_id=`tg:handle`, tg_id, handle, x_user_id, settings{}|null, created_at}
 //   referrals{_id=`a:b`, referrer, referred, subscribed, created_at}
+//   ref_ledger{_id=`j:<referred>`|`c:<charge_id>`, referrer, referred, kind:join|convert, points, amount?, currency?, charge_id?, at}
 //   bloom_accounts{_id=id, label, session_token, capacity, status, expires_at}
 //   tracked_handles{_id=handle, x_user_id, bloom_account_id, ref_count, last_event_at}
 //   tweet_cache{_id=tweet_id, author_handle, text, media, is_retweet, rt_source, seen_at:Date}
@@ -152,6 +153,47 @@ export async function addReferral(referrer, referred) {
 }
 export async function markReferralSubscribed(tgId) {
   await col("referrals").updateMany({ referred: Number(tgId) }, { $set: { subscribed: 1 } });
+}
+
+// ---------- ref points (ledger idempotent) ----------
+// Ghi 1 dòng sổ cái rồi CHỈ $inc users.points khi dòng THỰC SỰ mới tạo (upsertedCount===1).
+// _id unique -> replay / gọi đồng thời không bao giờ cộng 2 lần. Trả điểm đã cộng (0 nếu đã ghi trước đó).
+async function award(referrer, referred, kind, points, extra = {}) {
+  referrer = Number(referrer); referred = Number(referred); points = Math.round(points);
+  if (!referrer || points <= 0) return 0;
+  const _id = kind === "join" ? `j:${referred}` : `c:${extra.charge_id}`;
+  const r = await col("ref_ledger").updateOne(
+    { _id },
+    { $setOnInsert: { referrer, referred, kind, points, ...extra, at: now() } },
+    { upsert: true });
+  if (r.upsertedCount !== 1) return 0;                                   // đã ghi trước đó -> bỏ qua
+  await col("users").updateOne({ _id: referrer }, { $inc: { points } });
+  return points;
+}
+
+// JOIN: gọi ở /start khi có ?start=<referrer>. Chỉ thưởng đúng nguồn first-touch (referred_by===referrer),
+// idempotent (j:<referred>) -> /start lại không cộng thêm. Trả điểm đã cộng để bot notify referrer.
+export async function recordReferralOnStart(referrer, referred) {
+  referrer = Number(referrer); referred = Number(referred);
+  if (!referrer || referrer === referred) return 0;
+  const u = await getUser(referred);
+  if (!u || u.referred_by !== referrer) return 0;
+  await addReferral(referrer, referred);
+  return award(referrer, referred, "join", cfg.refJoinPoints);
+}
+
+// CONVERT: gọi khi referred phát sinh payment. Điểm TỈ LỆ theo số tiền, theo đơn vị:
+//   currency "XTR" (Telegram Stars) -> amount = số Stars, rate = refPointsPerStar
+//   crypto USDT/SOL/ERC20 -> amount = giá trị USD, rate = refPointsPerUsd
+// chargeId = telegram_payment_charge_id (Stars) HOẶC tx hash (crypto) -> idempotent (c:<chargeId>).
+// Trả {referrer, points} nếu vừa cộng, null nếu không có referrer / đã ghi / điểm 0.
+export async function awardRefConvert(referred, { amount, currency, chargeId } = {}) {
+  const u = await getUser(referred);
+  const referrer = u?.referred_by;
+  if (!referrer || !chargeId || !(amount > 0)) return null;
+  const rate = String(currency).toUpperCase() === "XTR" ? cfg.refPointsPerStar : cfg.refPointsPerUsd;
+  const points = await award(referrer, referred, "convert", amount * rate, { charge_id: chargeId, amount, currency: currency || "USD" });
+  return points > 0 ? { referrer, points } : null;
 }
 export async function referralStats(tgId) {
   tgId = Number(tgId);

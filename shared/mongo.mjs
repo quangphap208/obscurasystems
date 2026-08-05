@@ -31,6 +31,10 @@ async function ensureIndexes(db) {
   await db.collection("watches").dropIndex("tg_id_1_handle_1").catch(() => {});   // migrate: bỏ index cũ (thiếu platform -> chặn cross-platform gây E11000)
   await db.collection("referrals").createIndex({ referrer: 1 });
   await db.collection("referrals").createIndex({ referred: 1 });
+  // ref_ledger: sổ cái điểm ref (nguồn sự thật để đối soát/đổi thưởng). _id = khoá idempotent
+  // (j:<referred> cho join, c:<charge_id> cho convert) -> không double-count kể cả gọi đồng thời.
+  await db.collection("ref_ledger").createIndex({ referrer: 1 });
+  await db.collection("ref_ledger").createIndex({ referred: 1 });
   await db.collection("tracked_handles").createIndex({ x_user_id: 1 });
   await db.collection("tracked_handles").createIndex({ bloom_account_id: 1 });
   // TTL auto-prune: Mongo tự xoá theo trường Date.

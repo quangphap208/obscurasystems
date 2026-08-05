@@ -4,3 +4,4 @@ be/state/
 data/
 *.log
 .DS_Store
+scripts/announce_result.json

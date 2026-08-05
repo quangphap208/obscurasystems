@@ -47,6 +47,12 @@ async function show(ctx, { text, keyboard }, edit = false) {
   }
 }
 
+// Báo referrer khi họ được cộng điểm ref (join / convert). try/catch: referrer có thể đã block bot.
+async function notifyReferrer(referrer, pts, kind) {
+  const what = kind === "join" ? "joined via your link" : "upgraded to Pro";
+  try { await bot.api.sendMessage(referrer, `🎉 A friend ${what}! <b>+${pts}</b> referral points.\nTap 👥 Referrals to see your total.`, HTML()); } catch {}
+}
+
 async function welcome(ctx, edit = false) {
   const u = await repo.getUser(ctx.from.id);
   const n = await repo.countWatches(ctx.from.id);
@@ -60,6 +66,10 @@ bot.command("start", async (ctx) => {
   if (/^\d+$/.test(p)) referredBy = Number(p);
   else if (/^qa[\s_+]?/i.test(p)) qa = p.replace(/^qa[\s_+]?/i, "").replace(/^@/, "");
   await repo.ensureUser(ctx.from.id, ctx.from.username || ctx.from.first_name, referredBy);
+  if (referredBy) {
+    const pts = await repo.recordReferralOnStart(referredBy, ctx.from.id);   // idempotent + chỉ nguồn first-touch
+    if (pts > 0) notifyReferrer(referredBy, pts, "join");
+  }
   if (qa) return qaReply(ctx, qa);
   await welcome(ctx);
 });
@@ -151,8 +161,11 @@ async function sendProInvoice(ctx) {
 }
 bot.on("pre_checkout_query", (ctx) => ctx.answerPreCheckoutQuery(true).catch(() => {}));
 bot.on("message:successful_payment", async (ctx) => {
+  const pay = ctx.message.successful_payment;   // XTR: currency "XTR", total_amount = số Stars, telegram_payment_charge_id
   await repo.setUserPlan(ctx.from.id, { tier: "Pro", accountLimit: cfg.proLimit, expiresAt: Date.now() + cfg.proDays * 86400000 });
   await repo.markReferralSubscribed(ctx.from.id);
+  const res = await repo.awardRefConvert(ctx.from.id, { amount: pay.total_amount, currency: pay.currency, chargeId: pay.telegram_payment_charge_id });
+  if (res) notifyReferrer(res.referrer, res.points, "convert");
   await ctx.reply(`✅ Payment successful! <b>Pro</b> plan for ${cfg.proDays} days, limit <b>${cfg.proLimit}</b> accounts.`, HTML());
 });
 
