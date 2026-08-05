@@ -9,6 +9,8 @@
 // (tránh dup do reclassify type: tweet:id vs quote:id là 2 dedupKey khác nhau).
 import { J7_TRUNCATED } from "../be-core/events.mjs";
 const WAIT_MS = 3000;
+// Log chi tiết [j7-buf]/[j7-fx] CHỈ khi J7_DEBUG=1 (mặc định TẮT — đỡ tốn dung lượng log).
+const dbg = (...a) => { if (process.env.J7_DEBUG === "1") console.log(...a); };
 
 export function makeExpandBuffer({ dispatch, fetchFull }) {
   const pending = new Map();     // tweetId -> timer (bản cắt đang đợi expansion)
@@ -30,16 +32,16 @@ export function makeExpandBuffer({ dispatch, fetchFull }) {
       const incomplete = ev.kind === "retweet" || J7_TRUNCATED.test(ev.content || "") || J7_TRUNCATED.test(raw?.text || "");
       if (!incomplete) { markSent(id); return dispatch(ev); }   // đủ -> gửi ngay
       cancelPending(id);
-      console.log(`[j7-buf] hold @${ev.actor || "?"} ${ev.kind} — đợi expansion (${WAIT_MS}ms)`);
+      dbg(`[j7-buf] hold @${ev.actor || "?"} ${ev.kind} — đợi expansion (${WAIT_MS}ms)`);
       pending.set(id, setTimeout(() => {
         pending.delete(id); markSent(id);   // markSent TRƯỚC khi fetch: expansion tới trong lúc fetch -> bỏ (không dup)
         if (!fetchFull) {
-          console.log(`[j7-buf] @${ev.actor || "?"} KHÔNG có expansion sau ${WAIT_MS}ms -> bản cắt (fallback -> gate/Bloom)`);
+          dbg(`[j7-buf] @${ev.actor || "?"} KHÔNG có expansion sau ${WAIT_MS}ms -> bản cắt (fallback -> gate/Bloom)`);
           return dispatch(ev);
         }
         Promise.resolve(fetchFull(ev)).then((full) => {
-          if (full) { console.log(`[j7-fx] @${ev.actor || "?"} ${ev.kind} không expansion -> fxtwitter ✓ (bản đầy đủ)`); dispatch(full); }
-          else { console.log(`[j7-fx] @${ev.actor || "?"} ${ev.kind} không expansion, fxtwitter ✗ -> bản cắt (fallback -> gate/Bloom)`); dispatch(ev); }
+          if (full) { dbg(`[j7-fx] @${ev.actor || "?"} ${ev.kind} không expansion -> fxtwitter ✓ (bản đầy đủ)`); dispatch(full); }
+          else { dbg(`[j7-fx] @${ev.actor || "?"} ${ev.kind} không expansion, fxtwitter ✗ -> bản cắt (fallback -> gate/Bloom)`); dispatch(ev); }
         }).catch(() => dispatch(ev));
       }, WAIT_MS));
     },
@@ -49,7 +51,7 @@ export function makeExpandBuffer({ dispatch, fetchFull }) {
       if (id && dispatched.has(id)) return;   // bản đủ đã gửi -> bỏ (tránh dup reclassify)
       const wasPending = id && pending.has(id);
       if (id) { cancelPending(id); markSent(id); }
-      if (wasPending) console.log(`[j7-buf] @${ev.actor || "?"} expansion ✓ -> gửi bản ĐẦY ĐỦ (j7 tự render)`);
+      if (wasPending) dbg(`[j7-buf] @${ev.actor || "?"} expansion ✓ -> gửi bản ĐẦY ĐỦ (j7 tự render)`);
       dispatch(ev);
     },
     stop() {
