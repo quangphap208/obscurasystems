@@ -112,6 +112,10 @@ bot.command("settings", async (ctx) => {
   await repo.ensureUser(ctx.from.id, ctx.from.username);
   await show(ctx, globalSettingsScreen(await repo.getGlobalSettings(ctx.from.id)));
 });
+bot.command("ref", async (ctx) => {
+  await repo.ensureUser(ctx.from.id, ctx.from.username);
+  await show(ctx, referralScreen(BOT_USER, ctx.from.id, await repo.referralStats(ctx.from.id)));
+});
 // /support <message> -> forward thẳng tới DM admin (không lưu DB). Rate-limit 60s/user + cap 1000 ký tự.
 const supportCooldown = new Map();   // tgId -> last ts (in-memory; reset khi restart)
 bot.command("support", async (ctx) => {
@@ -338,6 +342,7 @@ const userCommands = [
   { command: "remove", description: "/remove username | stop tracking an account" },
   { command: "accounts", description: "view tracked accounts" },
   { command: "settings", description: "notification settings per account" },
+  { command: "ref", description: "your referral link & points" },
   ...(cfg.subsEnabled ? [{ command: "subscribe", description: "upgrade your plan" }] : []),
   { command: "support", description: "/support <message> | report an issue to the team" },
   // ẩn tạm cho tới khi có handler: bulkremove, mute, ca
