@@ -39,7 +39,8 @@ export const cfg = {
   // thanh toán: Telegram Stars (XTR). providerToken rỗng = Stars; hoặc token nhà cung cấp khác.
   starsProviderToken: process.env.STARS_PROVIDER_TOKEN || "",
   // giá / gói (override qua env). Chi tiết + lý do: docs/PAYMENT_RESEARCH.md §2.
-  freeLimit: Number(process.env.FREE_LIMIT || 3),                 // Free: vĩnh viễn, không hết hạn
+  freeLimit: Number(process.env.FREE_LIMIT || 5),                 // Free = TRIAL: N account X trong trialDays ngày
+  trialDays: Number(process.env.TRIAL_DAYS || 3),                 // độ dài trial Free (ngày), tính từ lúc /start
   proLimit: Number(process.env.PRO_LIMIT || 30),
   proPriceStars: Number(process.env.PRO_PRICE_STARS || 1000),     // ~$20 (USD×1.3)
   proPriceUsd: Number(process.env.PRO_PRICE_USD || 15),           // giá crypto

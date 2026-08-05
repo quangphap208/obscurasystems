@@ -29,7 +29,7 @@ mà bạn net bằng/hơn Stars; hợp audience crypto-native).
 
 | Gói | Acc | 🪙 Crypto | ⭐ Stars (+30%) | Bạn net crypto | Bạn net Stars |
 |---|---|---|---|---|---|
-| **Free** ♾️ | **3** (vĩnh viễn, không hết hạn) | $0 | – | – | – |
+| **Free (TRIAL)** | **5** acc · **3 ngày** (từ /start) | $0 | – | – | – |
 | **Pro** ⭐ | **30** | **$15** | ~**1000⭐** (~$20) | ~$15 | ~$13 |
 | **Whale** | **100** | **$40** | ~**2600⭐** (~$52) | ~$40 | ~$34 |
 | **Pack +10 acc** | +10 | **$6** *(đề xuất, chưa chốt cứng)* | ~**400⭐** (~$8) | ~$6 | ~$5 |
@@ -38,14 +38,14 @@ mà bạn net bằng/hơn Stars; hợp audience crypto-native).
 **Đơn giá/acc:** Whale **$0.40** < Pro **$0.50** < Pack **$0.60** — mua sỉ rẻ nhất, cam kết nền vừa, top-up lẻ nhỉnh hơn (chuẩn ladder SaaS).
 
 - **Stars = USD × 1.3** ("nudge" sang crypto; bù một phần ~35% phí nền tảng). Crypto vẫn net > Stars → incentive đúng hướng. Muốn Stars net **bằng** crypto thì ×1.54.
-- ⏱ **Đồng hồ hết hạn gói trả phí:** LUÔN từ **ngày mua** + số ngày gói (Free vĩnh viễn, không có đồng hồ). Pack = **one-time**, +10 acc tới khi tier hết hạn (§6.1).
+- ⏱ **Đồng hồ:** Free = **TRIAL 5 acc / 3 ngày từ /start** (hết → pause TẤT CẢ watch + báo, /subscribe để tiếp; `/start` hiện thời gian còn lại). Gói trả phí từ **ngày mua** + số ngày (gia hạn STACK, §6.5). Pack one-time tới hết hạn tier (§6.1).
 - `account_limit = tier_base + addon_packs×10`. Thêm field `users.addon_packs` (int).
 - **Pack breakpoint (pack $6):** cần >~**70 acc** thì lên Whale rẻ hơn (5 pack = $30, Pro+5pack $45 > Whale $40). Pack lo top-up 30–70 acc.
 - **Vẫn rẻ áp đảo:** 15–30 KOL rẻ hơn Redacted **50–75%**; 100 acc rẻ **80%**. Đơn giá $0.40–0.60/acc — rẻ nhất thị trường.
 
 **Map config (khi code):**
 ```
-FREE_LIMIT=3            # vĩnh viễn, expires_at=null
+FREE_LIMIT=5            # TRIAL: N acc trong TRIAL_DAYS ngày; TRIAL_DAYS=3
 PRO_LIMIT=30            PRO_PRICE_USD=15    PRO_PRICE_STARS=1000
 WHALE_LIMIT=100         WHALE_PRICE_USD=40  WHALE_PRICE_STARS=2600
 PACK_SIZE=10            PACK_PRICE_USD=6    PACK_PRICE_STARS=400    # đề xuất, chưa chốt cứng
@@ -189,7 +189,7 @@ Ship được ngay: Free/Pro/Whale + Pack bằng Stars, **đồng hồ tính t�
 - [ ] **Deploy .env**: thêm `WHALE_*`, `PACK_*`, `PRO_PRICE_USD` vào VPS `.env`; chỉnh `FREE_LIMIT`/`PRO_LIMIT`/`PRO_PRICE_STARS` về số chốt nếu muốn (hiện .env đang FREE=15/PRO=40/500⭐). Bật `SUBS_ENABLED=1` khi mở bán.
 - [ ] Verify live: Pro→limit 30 + hạn 30d · Pack→+10 (cần tier còn hạn) · Whale→100.
 
-> ✅ **Expiry-downgrade (mechanism C) — ĐÃ LÀM:** sweep `repo.downgradeExpired()` mỗi `EXPIRY_SWEEP_MIN` (60') + lúc boot → gói hết hạn (`expires_at<now & tier≠Free`) tụt về **Free** (`tier/limit/addon_packs` reset), **giữ oldest `freeLimit` watch X active + PAUSE phần vượt** (BE `watchersOfHandle` lọc `paused` → không gửi), báo user. **Gia hạn** (`applyPurchase`) bỏ pause → khôi phục tức thì, không mất dữ liệu. `countWatches` loại paused (free-user quản được `freeLimit` slot). accountsScreen đánh dấu ⏸.
+> ✅ **Expiry (trial + gói) — mechanism C, ĐÃ LÀM:** sweep `repo.sweepExpired()` mỗi `EXPIRY_SWEEP_MIN` (60') + boot → user hết hạn (`expires_at<now`, cả **trial Free** lẫn **gói trả phí**) → **PAUSE TẤT CẢ watch (X + platform)** (BE `watchersOfHandle` lọc `paused` → ngừng gửi) + set `expired_notified` + báo (trial vs gói). **Gia hạn** (`applyPurchase`) un-pause + reset `expired_notified` → khôi phục tức thì, không mất dữ liệu. Gate thêm: **`/add` + platform-add chặn nếu `!hasAccess`** (`hasAccess` = trial/gói còn hạn HOẶC Whitelist). Không còn free-forever. accountsScreen đánh dấu ⏸.
 > - *Lưu ý:* handle chỉ watch bởi user paused **vẫn được BE track** (pool) — pause chỉ chặn delivery, không untrack (gia hạn = instant). Watch platform (truth/IG) chưa pause (chỉ X). Có thể tối ưu sau.
 
 ### Phase 2 — Crypto core `fe/crypto-pay.mjs` (cần ví + Infura) — ✅ CODE XONG (chờ test live)
@@ -257,3 +257,4 @@ rate-limit/độ trễ · support · add-on module bán rời.
 - **2026-08-05 (PAYMENT_WEBHOOK audit)** — Webhook audit thanh toán RIÊNG (`PAYMENT_WEBHOOK`, tách khỏi `SLACK_WEBHOOK`): bắn **4 sự kiện** kèm **tgId + username** → `paymentHook` (`{text, content}` hợp Slack/Discord/custom): **📝 invoice tạo** (user+kind+coin+số+ví — mục đích chính: nếu auto-credit hỏng vẫn biết AI chờ để `/grant` tay), **✅ crypto PAID** (tx), **✅ Stars PAID**, **⚠️ /pay NO MATCH** (user báo lệch). Trống = tắt.
 - **2026-08-05 (RPC health-check)** — Thêm **kiểm tra Infura live/dead**: (1) **boot probe** `getVersion` từng RPC → log ✓live/✗DEAD (che key), alert 🔴 nếu **tất cả dead** / 🟡 nếu **một phần** (Slack + DM admin) → bắt ngay URL sai/key chết thay vì fail âm thầm. (2) **runtime**: RPC fail 3 tick liên tiếp → alert "auto-credit GIÁN ĐOẠN", hồi phục → alert 🟢. `checkRpcHealth()` export (gắn `/admin` được). Trước đó poller fail hoàn toàn im lặng.
 - **2026-08-05 (học từ ref ETH PAYMENT_SYSTEM.md)** — Áp dụng 2 điểm họ tự flag ở §10/§11: **(1) gia hạn STACK** thời gian còn lại (`applyPurchase`, §6.5) — tránh cướp ngày người gia hạn sớm. **(2) poller catch-up**: phân trang `getSignaturesForAddress` (before-cursor, limit 100, cap 300) tới khi gặp `sigSeen` → KHÔNG sót payment khi bot down lâu + burst; `sigSeen` bền trong Mongo (TTL 3d) nên **hơn** cursor in-memory của họ (họ reset về head khi restart). Phần còn lại mình đã ngang/hơn: unique-amount **deterministic** (không random-collision như họ), multi-RPC **round-robin+failover** (> time-slice 1 key), `claimInvoice` atomic. Bỏ qua: credits/B1G1 (feature riêng của họ), stats dashboard (tuỳ chọn, để sau).
+- **2026-08-05 (Free → TRIAL)** — **ĐẢO** quyết định "Free 3 vĩnh viễn" → **Free = TRIAL 5 acc / 3 ngày** (`FREE_LIMIT=5`, `TRIAL_DAYS=3`), tính từ **/start** (`ensureUser` set `expires_at=now+3d`; Free-null cũ migrate 1 lần lúc /start). Hết trial → `sweepExpired` **pause TẤT CẢ watch** + báo "trial hết hạn" (1 lần, `expired_notified`). `/start` field **Exp hiện thời gian còn lại** (`fmtExp` đổi sang "2d 5h left"). Gate `/add` + platform-add bằng **`hasAccess`** (trial/gói còn hạn hoặc Whitelist). `downgradeExpired`→`sweepExpired` (pause ALL, bỏ "giữ freeLimit" vì không còn free-forever). Gia hạn reset `expired_notified` + un-pause. UI: "Free trial", subscribeScreen "5 acc for 3 days".

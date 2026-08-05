@@ -8,9 +8,13 @@ const BOT_NAME = "Obscura Systems";
 // Hết hạn CHỈ khi có expires_at và đã qua. Free & Whitelist (admin không đặt hạn) -> "Never";
 // Pro (và Whitelist có hạn) -> ngày, hoặc EXPIRED nếu qua.
 const isPlanExpired = (u) => !!u?.expires_at && u.expires_at < Date.now();
+// Hiện THỜI GIAN CÒN LẠI (trial/gói). Whitelist (không hạn) -> "Never".
 const fmtExp = (u) => {
   if (!u?.expires_at) return "Never";
-  return isPlanExpired(u) ? "EXPIRED" : new Date(u.expires_at).toISOString().slice(0, 10);
+  const ms = u.expires_at - Date.now();
+  if (ms <= 0) return "EXPIRED";
+  const d = Math.floor(ms / 86400000), h = Math.floor((ms % 86400000) / 3600000), m = Math.floor((ms % 3600000) / 60000);
+  return d > 0 ? `${d}d ${h}h left` : h > 0 ? `${h}h ${m}m left` : `${m}m left`;
 };
 
 // #1 Welcome
@@ -19,14 +23,14 @@ export function welcomeScreen(user, nWatched, botUser) {
   let text =
     `Welcome to ${BOT_NAME}, <b>${esc(user?.username || "there")}</b> 👋\n\n` +
     `📊 Your plan:\n` +
-    `• Tier: <b>${esc(user?.tier || "Free")}</b>\n` +
+    `• Tier: <b>${user?.tier === "Free" ? "Free trial" : esc(user?.tier || "Free")}</b>\n` +
     `• Limit: <b>${user?.account_limit ?? 0}</b> X accounts\n` +
     `• Exp: <b>${fmtExp(user)}</b>\n\n` +
     `✅ 📸 <b>Instagram</b> &amp; 🟣 <b>Truth Social</b>: full access — just enable (not counted in your X limit)\n\n` +
     `Current Accounts Watched:\n` +
     `• <i>X</i>: <b>${nWatched}</b>\n\n` +
     `💡 <b>/add</b> &amp; <b>/remove</b> <b>&lt;username&gt;</b> for X`;
-  if (expired) text += `\n\n⚠️ Your plan has expired. Use /subscribe to purchase a plan to continue using the service.`;
+  if (expired) text += `\n\n⚠️ Your ${user?.tier === "Free" ? "free trial" : "plan"} has ended — accounts paused. Use /subscribe to continue.`;
   const keyboard = new InlineKeyboard()
     .text("👀 X accounts", "viewAccounts").row()
     .text("🟣 Truth Social", "platmenu:truth").text("📸 Instagram", "platmenu:ig").row()
@@ -168,7 +172,7 @@ export function subscribeScreen(user, c) {
   const crypto = c.receiveSolAddresses?.length > 0 && c.solanaRpcUrls?.length > 0;   // chỉ nudge crypto khi đã bật
   const text =
     `💎 <b>Subscribe</b>\n\n` +
-    `<b>Free</b> — <b>${c.freeLimit}</b> accounts, forever. Basic tracking.\n\n` +
+    `<b>Free trial</b> — <b>${c.freeLimit}</b> accounts for <b>${c.trialDays}</b> days. Full features to try.\n\n` +
     `<b>Pro</b> — <b>${c.proPriceStars}</b>⭐ / ${c.proDays}d\n` +
     `• Up to <b>${c.proLimit}</b> accounts · every notification type\n\n` +
     `<b>Whale</b> — <b>${c.whalePriceStars}</b>⭐ / ${c.whaleDays}d\n` +

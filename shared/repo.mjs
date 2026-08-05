@@ -33,14 +33,16 @@ export async function ensureUser(tgId, username, referredBy = null) {
     if (username && username !== existing.username) set.username = username;
     // Free-tier: account_limit bám cfg.freeLimit hiện tại (Pro giữ limit cố định lúc nâng gói).
     if (existing.tier === "Free" && existing.account_limit !== cfg.freeLimit) set.account_limit = cfg.freeLimit;
+    // Free-forever cũ (expires_at=null) -> BẬT TRIAL: hạn tính từ /start này (migrate 1 lần).
+    if (existing.tier === "Free" && existing.expires_at == null) set.expires_at = now() + cfg.trialDays * 86400000;
     if (Object.keys(set).length) await col("users").updateOne({ _id: tgId }, { $set: set });
     return getUser(tgId);
   }
   const ref = referredBy && Number(referredBy) !== tgId ? Number(referredBy) : null;
   await col("users").insertOne({
     _id: tgId, tg_id: tgId, username: username || null, tier: "Free",
-    account_limit: cfg.freeLimit, expires_at: null, referred_by: ref, points: 0,
-    addon_packs: 0, created_at: now(), settings: { ...DEFAULTS },
+    account_limit: cfg.freeLimit, expires_at: now() + cfg.trialDays * 86400000, referred_by: ref, points: 0,
+    addon_packs: 0, expired_notified: false, created_at: now(), settings: { ...DEFAULTS },
   });
   if (ref && (await getUser(ref))) await addReferral(ref, tgId);
   return getUser(tgId);
@@ -57,6 +59,8 @@ export async function setUserPlan(tgId, { tier, accountLimit, expiresAt } = {}) 
 
 export const isExpired = (u) => !u || !u.expires_at || u.expires_at < now();
 export const isActive = (u) => !!u && !!u.expires_at && u.expires_at >= now();
+// Có quyền dùng dịch vụ = đang trong trial/gói còn hạn HOẶC Whitelist vĩnh viễn (admin cấp không đặt hạn).
+export const hasAccess = (u) => !!u && (isActive(u) || (u.tier === "Whitelist" && !u.expires_at));
 
 // ---------- plans / purchase (Phase 1: Stars) — đồng hồ tính từ NGÀY MUA. docs/PAYMENT_RESEARCH.md §2/§9 ----------
 export function baseLimit(tier) {
@@ -84,29 +88,23 @@ export async function applyPurchase(tgId, kind) {
   const from = u.expires_at && u.expires_at > now() ? u.expires_at : now();
   const expiresAt = from + days * 86400000;
   // reset packs (one-time đến hết hạn tier).
-  await col("users").updateOne({ _id: tgId }, { $set: { tier, account_limit: limit, expires_at: expiresAt, addon_packs: 0 } });
+  await col("users").updateOne({ _id: tgId }, { $set: { tier, account_limit: limit, expires_at: expiresAt, addon_packs: 0, expired_notified: false } });
   await col("watches").updateMany({ tg_id: tgId, paused: true }, { $set: { paused: false } });   // gia hạn/nâng cấp -> BỎ pause
   return { kind, tier, account_limit: limit, expires_at: expiresAt, days };
 }
 
-// Sweep hạ gói HẾT HẠN -> Free (expiry-downgrade, cơ chế "pause"). docs/PAYMENT_RESEARCH.md §9.
-//   reset tier/limit/packs; giữ oldest freeLimit watch X ACTIVE, PAUSE phần vượt (BE bỏ qua khi gửi);
-//   gia hạn (applyPurchase) sẽ bỏ pause -> khôi phục tức thì, KHÔNG mất dữ liệu. Trả list để bot notify.
-export async function downgradeExpired() {
+// Sweep HẾT HẠN (trial Free HOẶC gói trả phí) -> PAUSE toàn bộ watch (X + platform), báo 1 lần.
+// Không còn free-forever: hết hạn = ngừng dịch vụ tới khi /subscribe. Gia hạn (applyPurchase) un-pause hết.
+// Giữ expires_at (quá khứ) + expired_notified=true -> không sweep/notify lại. docs/PAYMENT_RESEARCH.md §9.
+export async function sweepExpired() {
   const expired = await col("users")
-    .find({ tier: { $ne: "Free" }, expires_at: { $ne: null, $lt: now() } })
+    .find({ expires_at: { $ne: null, $lt: now() }, expired_notified: { $ne: true } })
     .project({ _id: 1, tier: 1 }).toArray();
   const out = [];
   for (const u of expired) {
-    const tgId = u._id;
-    const xw = await col("watches").find({ tg_id: tgId, ...X_ONLY }).sort({ created_at: 1 }).project({ _id: 1 }).toArray();
-    const keep = xw.slice(0, cfg.freeLimit).map((w) => w._id);
-    const pause = xw.slice(cfg.freeLimit).map((w) => w._id);
-    if (keep.length) await col("watches").updateMany({ _id: { $in: keep } }, { $set: { paused: false } });
-    if (pause.length) await col("watches").updateMany({ _id: { $in: pause } }, { $set: { paused: true } });
-    // expires_at=null -> giống Free, không bị sweep lại
-    await col("users").updateOne({ _id: tgId }, { $set: { tier: "Free", account_limit: cfg.freeLimit, expires_at: null, addon_packs: 0 } });
-    out.push({ tgId, prevTier: u.tier, kept: keep.length, paused: pause.length });
+    await col("watches").updateMany({ tg_id: u._id }, { $set: { paused: true } });
+    await col("users").updateOne({ _id: u._id }, { $set: { expired_notified: true } });
+    out.push({ tgId: u._id, tier: u.tier });   // tier="Free" => hết trial; else => gói trả phí hết hạn
   }
   return out;
 }

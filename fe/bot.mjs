@@ -90,6 +90,7 @@ bot.command("add", async (ctx) => {
   const handle = parseHandle(ctx.match);
   if (!handle) return ctx.reply("Usage: <b>/add &lt;username or link&gt;</b>\ne.g. <code>/add elonmusk</code> or <code>/add https://x.com/elonmusk</code>", HTML());
   const u = await repo.ensureUser(ctx.from.id, ctx.from.username);
+  if (!repo.hasAccess(u)) return ctx.reply(`⌛ Your ${u.tier === "Free" ? "free trial" : "plan"} has ended.${cfg.subsEnabled ? "\nUse <b>/subscribe</b> to keep tracking accounts." : ""}`, HTML());
   if (await repo.getWatch(ctx.from.id, handle)) return ctx.reply(`Already watching <b>@${esc(handle)}</b>.`, HTML());
   const n = await repo.countWatches(ctx.from.id);
   if (n >= (u.account_limit ?? 0)) return ctx.reply(`⚠️ You've reached the <b>${u.account_limit}</b>-account limit of your <b>${esc(u.tier)}</b> plan.${cfg.subsEnabled ? `\nUse <b>/subscribe</b> to add a <b>+${cfg.packSize} pack</b> or upgrade to <b>Whale</b>.` : ""}`, HTML());
@@ -338,6 +339,7 @@ bot.on("callback_query:data", async (ctx) => {
       const selectAll = data.startsWith("plat:all:");
       const p = data.slice(selectAll ? 9 : 10);
       if (PLATFORMS.has(p)) {
+        if (selectAll && !repo.hasAccess(await repo.getUser(uid))) return ctx.answerCallbackQuery("Trial ended — /subscribe to add");
         const pl = await repo.getJ7Platforms();
         const list = platformDisplayList(p, (p === "truth" ? pl?.truth : pl?.ig) || []);
         for (const h of list) {
@@ -356,7 +358,8 @@ bot.on("callback_query:data", async (ctx) => {
       const p = rest.slice(0, i), h = rest.slice(i + 1);
       if (PLATFORMS.has(p) && h) {
         const set = await repo.platformWatchSet(uid, p);
-        if (set.has(h.toLowerCase())) await repo.removePlatformWatch(uid, h, p);
+        if (set.has(h.toLowerCase())) await repo.removePlatformWatch(uid, h, p);   // gỡ luôn cho phép
+        else if (!repo.hasAccess(await repo.getUser(uid))) return ctx.answerCallbackQuery("Trial ended — /subscribe to add");
         else await repo.addPlatformWatch(uid, h, p);
         await showPlatform(ctx, p, true);
       }
@@ -419,16 +422,14 @@ console.log(`FE bot @${BOT_USER} running.`);
 function startExpirySweep() {
   const run = async () => {
     try {
-      const list = await repo.downgradeExpired();
+      const list = await repo.sweepExpired();
       for (const d of list) {
-        try {
-          await bot.api.sendMessage(d.tgId,
-            `⌛ Your <b>${esc(d.prevTier)}</b> plan has expired — you're back on <b>Free</b> (${cfg.freeLimit} accounts).` +
-            (d.paused ? `\n<b>${d.paused}</b> account(s) are <b>paused</b> (no alerts). Use /subscribe to reactivate all instantly.` : ``),
-            { parse_mode: "HTML" });
-        } catch {}
+        const msg = d.tier === "Free"
+          ? `⌛ Your <b>${cfg.trialDays}-day free trial</b> has ended. Your accounts are <b>paused</b> (no alerts).\nUse <b>/subscribe</b> to continue — they reactivate instantly.`
+          : `⌛ Your <b>${esc(d.tier)}</b> plan has expired. Your accounts are <b>paused</b>.\nUse <b>/subscribe</b> to renew — everything reactivates instantly.`;
+        try { await bot.api.sendMessage(d.tgId, msg, { parse_mode: "HTML" }); } catch {}
       }
-      if (list.length) console.log(`[expiry] downgraded ${list.length} user(s)`);
+      if (list.length) console.log(`[expiry] paused ${list.length} expired user(s)`);
     } catch (e) { console.warn("[expiry]", e.message); }
   };
   run();
