@@ -128,8 +128,7 @@ User /subscribe
 - [x] Stars (XTR) — `/subscribe` invoice + `successful_payment` credit Pro. **Đang chạy.**
 - [x] Ref points nối sẵn cho crypto (`awardRefConvert` currency-aware, `REF_POINTS_PER_USD`). **Xong (046bdfc).**
 - [x] **Phase 1**: Tier Whale + Pack add-on (config + `applyPurchase`/`addon_packs` + FE invoice/callback/screens). **Code xong.**
-- [ ] `shared/repo.mjs`: collection `crypto_invoices` (Phase 2).
-- [ ] `fe/crypto-pay.mjs`: invoice unique-amount + adapter **Solana** (Infura RPC) + poller + credit.
+- [x] **Phase 2**: crypto core — `crypto_invoices` + `fe/crypto-pay.mjs` (invoice unique-amount + poller Infura + match/credit atomic). **Code xong, chờ test live.**
 - [ ] `fe/bot.mjs`: `/subscribe` 2 nhánh + chọn coin + pack invoice + start poller lúc boot.
 - [ ] `fe/screens.mjs`: màn method/coin + màn "gửi X tới địa chỉ Y".
 - [ ] `.env`: điền ví nhận + RPC keys.
@@ -166,13 +165,14 @@ Ship được ngay: Free/Pro/Whale + Pack bằng Stars, **đồng hồ tính t�
 
 > ⚠️ **Known gap (chưa xử lý, tách task riêng):** khi gói hết hạn, `account_limit` KHÔNG tự tụt về Free (pre-existing từ flow Pro cũ). Cần task "expiry downgrade" (tụt limit + xử lý account vượt hạn) — không thuộc Phase 1.
 
-### Phase 2 — Crypto core `fe/crypto-pay.mjs` (cần ví + Infura)
-- [ ] `shared/mongo.mjs`: collection `crypto_invoices` + index (`status`,`coin`, TTL `expires_at`).
-- [ ] `shared/repo.mjs`: `createInvoice`, `listPending(coin)`, `markPaid(id,sig)`, `expireStale`, seen-sig (idempotency).
-- [ ] `fe/crypto-pay.mjs`:
-  - `makeInvoice(tgId, kind, coin)`: `price_usd` theo gói; stablecoin → `token_amount = price_usd + unique .00x` (không trùng pending cùng coin); SOL → `price_usd/solPrice(Jupiter, khoá)` + unique lamport.
-  - Poller ~25s: `getSignaturesForAddress(RECEIVE_SOL_ADDRESS)` (Infura) → sig mới → `getTransaction(jsonParsed)` → delta SOL (pre/postBalances) + SPL theo **mint** (pre/postTokenBalances) → match pending (address+mint+amount) → `applyPurchase` + `markPaid` + `awardRefConvert({amount:price_usd, currency:coin, chargeId:sig})` + notify. Idempotent theo sig. Late-grace 24h.
-- [ ] Poller **CHỈ chạy ở FE** (1 instance) → no double-credit.
+### Phase 2 — Crypto core `fe/crypto-pay.mjs` (cần ví + Infura) — ✅ CODE XONG (chờ test live)
+- [x] `shared/mongo.mjs`: `crypto_invoices` index (`coin`,`status`) + (`status`,`dead_at`); `crypto_seen` TTL 3d.
+- [x] `shared/repo.mjs`: `createCryptoInvoice`, `listPendingInvoices`, `pendingExpectBases`, **`claimInvoice`** (pending→paid atomic qua `modifiedCount` = chống double-credit), `expireStaleInvoices`, `sigSeen`/`markSigSeen`.
+- [x] `fe/crypto-pay.mjs`:
+  - `makeInvoice(tgId, kind, coin)`: `price_usd` theo gói; **matching bằng base-unit nguyên** (không float) — stablecoin `+s×1000` (0.001), SOL `+s×1 lamport`; SOL giá qua Jupiter (khoá). Round-trip display↔base verify OK.
+  - Poller ~25s: `getSignaturesForAddress` (Infura) → sig mới (skip `sigSeen`) → `getTransaction(jsonParsed)` → `receivedDeltas` (SOL pre/postBalances + SPL theo **mint** pre/postTokenBalances) → match pending (`expect_base`) → `claimInvoice` (atomic) → `applyPurchase` + `awardRefConvert({amount:price_usd, currency:coin, chargeId:sig})` + notify. Late-grace `dead_at` 24h.
+  - `verifyManual(bot, sig)` cho `/pay` fallback (Phase 3 wiring).
+- [x] Poller **CHỈ chạy ở FE** (`startPoller(bot)` trước `bot.start`, `running` guard, no-op nếu chưa cấu hình) → no double-credit.
 
 ### Phase 3 — Crypto UX + wiring
 - [ ] `fe/screens.mjs`: màn **method** (⭐ Stars / 🪙 Crypto) → **coin** (USDC/USDT/SOL) → **invoice** (địa chỉ copy + số tiền chính xác + đếm ngược 30').

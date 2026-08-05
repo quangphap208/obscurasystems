@@ -86,6 +86,38 @@ export async function applyPurchase(tgId, kind) {
   return { kind, tier, account_limit: limit, expires_at: expiresAt, days };
 }
 
+// ---------- crypto invoices (Phase 2) — auto-poll + unique-amount. docs/PAYMENT_RESEARCH.md §4 ----------
+export async function createCryptoInvoice({ tgId, kind, coin, mint, decimals, expectBase, display, priceUsd, address, windowMin, graceH }) {
+  const created = now();
+  const doc = {
+    _id: `${Number(tgId)}:${coin}:${created}`, tg_id: Number(tgId), kind, coin, mint: mint || null,
+    decimals, expect_base: expectBase, display, price_usd: priceUsd, address, status: "pending",
+    created_at: created, expires_at: created + windowMin * 60000, dead_at: created + graceH * 3600000,
+    matched_sig: null, paid_at: null,
+  };
+  await col("crypto_invoices").insertOne(doc);
+  return doc;
+}
+export async function listPendingInvoices(coin) {
+  return col("crypto_invoices").find({ coin, status: "pending", dead_at: { $gte: now() } }).toArray();
+}
+// expect_base của các invoice pending cùng coin -> để cấp số lẻ KHÔNG trùng.
+export async function pendingExpectBases(coin) {
+  const rows = await col("crypto_invoices").find({ coin, status: "pending", dead_at: { $gte: now() } }).project({ expect_base: 1 }).toArray();
+  return new Set(rows.map((r) => r.expect_base));
+}
+// atomic: chỉ 1 lần pending->paid (chống double-credit; modifiedCount version-independent).
+export async function claimInvoice(id, sig) {
+  const r = await col("crypto_invoices").updateOne({ _id: id, status: "pending" }, { $set: { status: "paid", matched_sig: sig, paid_at: now() } });
+  return r.modifiedCount === 1;
+}
+export async function expireStaleInvoices() {
+  await col("crypto_invoices").updateMany({ status: "pending", dead_at: { $lt: now() } }, { $set: { status: "expired" } });
+}
+// sig đã dò (tối ưu, tránh re-parse getTransaction). Đúng đắn double-credit do claimInvoice lo.
+export async function sigSeen(sig) { return !!(await col("crypto_seen").findOne({ _id: sig })); }
+export async function markSigSeen(sig) { try { await col("crypto_seen").insertOne({ _id: sig, at: now() }); } catch {} }
+
 // ---------- global settings (nhúng trong user.settings) ----------
 export async function getGlobalSettings(tgId) {
   const u = await getUser(tgId);

@@ -6,6 +6,7 @@ import { connect, close } from "../shared/mongo.mjs";
 import * as repo from "../shared/repo.mjs";
 import { byKey, GATE_TEXT } from "../shared/settings.mjs";
 import { resolveHandle, parseHandle } from "./xsearch.mjs";
+import { startPoller as startCryptoPoller } from "./crypto-pay.mjs";
 import {
   welcomeScreen, referralScreen, globalSettingsScreen, accountSettingsScreen,
   accountsScreen, subscribeScreen, platformScreen, platformDisplayList, esc,
@@ -372,4 +373,5 @@ console.log(`FE bot @${BOT_USER} running.`);
 
 process.once("SIGINT", async () => { await bot.stop(); await close(); process.exit(0); });
 process.once("SIGTERM", async () => { await bot.stop(); await close(); process.exit(0); });
+startCryptoPoller(bot);   // Phase 2: dò thanh toán crypto (no-op nếu chưa cấu hình ví/RPC)
 await bot.start({ onStart: () => console.log("polling…") });

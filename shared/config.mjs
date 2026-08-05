@@ -51,6 +51,14 @@ export const cfg = {
   packSize: Number(process.env.PACK_SIZE || 10),                  // add-on: +N acc, one-time đến hết hạn tier
   packPriceStars: Number(process.env.PACK_PRICE_STARS || 400),    // ~$8
   packPriceUsd: Number(process.env.PACK_PRICE_USD || 6),
+  // --- Crypto payment (Phase 2): CHỈ Solana — USDC/USDT-SPL + SOL. docs/PAYMENT_RESEARCH.md §3-5 ---
+  receiveSolAddress: process.env.RECEIVE_SOL_ADDRESS || "",       // ví nhận (chung cho USDC/USDT/SOL). Trống = TẮT crypto
+  solanaRpcUrl: process.env.SOLANA_RPC_URL || "",                 // endpoint Infura Solana (kèm key): solana-mainnet.infura.io/v3/<key>
+  usdcMint: process.env.USDC_MINT || "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  usdtMint: process.env.USDT_MINT || "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+  cryptoWindowMin: Number(process.env.CRYPTO_WINDOW_MIN || 30),   // thời hạn hiển thị invoice (phút)
+  cryptoLateGraceH: Number(process.env.CRYPTO_LATE_GRACE_H || 24),// vẫn khớp tx trễ trong N giờ
+  cryptoPollSec: Number(process.env.CRYPTO_POLL_SEC || 25),       // chu kỳ dò chain (giây)
   // --- Referral: GHI NHẬN points (quy đổi thưởng định sau). Cộng ở 2 mốc: join + convert(payment). ---
   refJoinPoints: Number(process.env.REF_JOIN_POINTS || 10),         // điểm khi 1 người MỚI join qua link
   refPointsPerStar: Number(process.env.REF_POINTS_PER_STAR || 0.1), // điểm / 1 Star referred chi (Telegram XTR)

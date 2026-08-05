@@ -41,4 +41,8 @@ async function ensureIndexes(db) {
   await db.collection("tweet_cache").createIndex({ seen_at: 1 }, { expireAfterSeconds: 3 * 24 * 3600 });
   await db.collection("deliveries").createIndex({ sent_at: 1 }, { expireAfterSeconds: 2 * 24 * 3600 });
   await db.collection("monitor_seen").createIndex({ at: 1 }, { expireAfterSeconds: 24 * 3600 });   // firehose race-mark
+  // crypto payment (Phase 2): invoice pending + sig đã xử lý (chống re-parse)
+  await db.collection("crypto_invoices").createIndex({ coin: 1, status: 1 });
+  await db.collection("crypto_invoices").createIndex({ status: 1, dead_at: 1 });
+  await db.collection("crypto_seen").createIndex({ at: 1 }, { expireAfterSeconds: 3 * 24 * 3600 });   // sig đã dò (perf)
 }
