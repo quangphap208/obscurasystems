@@ -5,7 +5,7 @@
 // Correctness: claimInvoice() (pending->paid atomic) chống double; sigSeen/markSigSeen chỉ đỡ re-parse.
 import { cfg } from "../shared/config.mjs";
 import * as repo from "../shared/repo.mjs";
-import { slackAlert } from "../shared/slack.mjs";
+import { slackAlert, paymentHook } from "../shared/slack.mjs";
 
 const SOL_MINT = "So11111111111111111111111111111111111111112";
 // coin -> {decimals, mint(null=SOL), label, step lẻ (base units), dp hiển thị}
@@ -87,6 +87,8 @@ export async function makeInvoice(tgId, kind, coin) {
     tgId, kind, coin, mint: c.mint(), decimals: c.decimals, expectBase, display,
     priceUsd: usd, address, windowMin: cfg.cryptoWindowMin, graceH: cfg.cryptoLateGraceH,
   });
+  const u = await repo.getUser(tgId);   // audit: nếu auto-credit hỏng, biết ai chờ + số/ví để /grant tay
+  paymentHook(`📝 Crypto invoice · ${u?.username ? "@" + u.username : "(no username)"} (${tgId}) · ${kind} · ${c.label} · send ${display} → ${address.slice(0, 6)}…${address.slice(-4)} · exp ${cfg.cryptoWindowMin}m`);
   return { ok: true, invoice: inv, address, amount: display, coin: c.label, expiresAt: inv.expires_at };
 }
 
@@ -125,6 +127,8 @@ async function tryCredit(bot, sig, tx, wallet) {
     await repo.markReferralSubscribed(hit.tg_id);
     await repo.awardRefConvert(hit.tg_id, { amount: hit.price_usd, currency: c.label, chargeId: sig });
     dbg("credited", hit._id, coin, hit.kind, "ví", wallet.slice(0, 6), "-> limit", res?.account_limit);
+    const bu = await repo.getUser(hit.tg_id);
+    paymentHook(`✅ Crypto PAID · ${bu?.username ? "@" + bu.username : ""} (${hit.tg_id}) · ${hit.kind} · ${c.label} ${hit.display} · tx ${sig.slice(0, 8)}… · limit ${res?.account_limit ?? "?"}`);
     try {
       const line = hit.kind === "pack"
         ? `✅ Crypto payment received! <b>+${cfg.packSize}</b> accounts — new limit <b>${res?.account_limit ?? "updated"}</b>.`

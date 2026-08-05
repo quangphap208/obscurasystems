@@ -4,6 +4,7 @@ import { Bot, GrammyError } from "grammy";
 import { cfg, assertFE, isAdmin } from "../shared/config.mjs";
 import { connect, close } from "../shared/mongo.mjs";
 import * as repo from "../shared/repo.mjs";
+import { paymentHook } from "../shared/slack.mjs";
 import { byKey, GATE_TEXT } from "../shared/settings.mjs";
 import { resolveHandle, parseHandle } from "./xsearch.mjs";
 import { startPoller as startCryptoPoller, makeInvoice, verifyManual, cryptoEnabled } from "./crypto-pay.mjs";
@@ -177,6 +178,7 @@ bot.on("message:successful_payment", async (ctx) => {
   const pay = ctx.message.successful_payment;   // XTR: currency "XTR", total_amount=Stars, invoice_payload=kind, telegram_payment_charge_id
   const kind = pay.invoice_payload || "pro";
   const res = await repo.applyPurchase(ctx.from.id, kind);
+  paymentHook(`✅ Stars PAID · ${ctx.from.username ? "@" + ctx.from.username : ""} (${ctx.from.id}) · ${kind} · ${pay.total_amount}⭐ · limit ${res?.account_limit ?? "?"}`);
   await repo.markReferralSubscribed(ctx.from.id);
   const ref = await repo.awardRefConvert(ctx.from.id, { amount: pay.total_amount, currency: pay.currency, chargeId: pay.telegram_payment_charge_id });
   if (ref) notifyReferrer(ref.referrer, ref.points, "convert");
@@ -194,6 +196,7 @@ bot.command("pay", async (ctx) => {
   await ctx.reply("🔎 Checking your transaction…", HTML());
   const r = await verifyManual(bot, sig);
   if (r.ok) return ctx.reply("✅ Payment found and credited. Thanks!", HTML());
+  if (r.error === "no_match") paymentHook(`⚠️ /pay NO MATCH · ${ctx.from.username ? "@" + ctx.from.username : ""} (${ctx.from.id}) · sig ${sig.slice(0, 12)}… — kiểm tra thủ công`);
   const m = r.error === "no_match" ? "No matching pending invoice (wrong amount/coin, or already credited)."
     : r.error === "tx_not_found" ? "Transaction not found yet — wait for confirmation and retry."
     : r.error === "crypto_disabled" ? "Crypto payments aren't enabled."

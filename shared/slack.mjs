@@ -12,3 +12,16 @@ export async function slackAlert(text) {
     });
   } catch (e) { console.warn("[slack]", e.message); }
 }
+
+// Webhook AUDIT thanh toán (PAYMENT_WEBHOOK) — tách khỏi slackAlert. Fire-and-forget.
+// Gửi {text, content} để hợp CẢ Slack (đọc text) LẪN Discord (đọc content). Trống = tắt.
+export async function paymentHook(text) {
+  if (!cfg.paymentWebhook) return;
+  try {
+    await fetch(cfg.paymentWebhook, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, content: text }),
+    });
+  } catch (e) { console.warn("[payhook]", e.message); }
+}

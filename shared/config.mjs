@@ -90,6 +90,9 @@ export const cfg = {
   observeOnly: process.env.OBSERVE_ONLY === "1",
   // Slack Incoming Webhook: alert lỗi Bloom/j7 (session expired / auth / FATAL). Trống = tắt. Để trong .env.
   slackWebhook: process.env.SLACK_WEBHOOK || "",
+  // Webhook AUDIT thanh toán (tách khỏi Slack lỗi): log mọi hành động payment (invoice tạo / credited /
+  // /pay lệch) + tgId -> nếu auto-credit hỏng vẫn biết USER nào chờ để /grant tay. Trống = tắt.
+  paymentWebhook: process.env.PAYMENT_WEBHOOK || "",
   // Feed watchdog: báo Slack khi feed IM LẶNG > N phút (WS treo/rớt ngầm, không expired/FATAL). 0 = tắt.
   feedSilenceMin: Number(process.env.FEED_SILENCE_MIN || 10),
 };
