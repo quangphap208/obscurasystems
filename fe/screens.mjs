@@ -207,12 +207,13 @@ export function cryptoCoinScreen(kind, c) {
 // Màn invoice: địa chỉ + số tiền CHÍNH XÁC + hạn. Số lẻ cuối = định danh giao dịch.
 export function cryptoInvoiceScreen(kind, coin, amount, address, expiresMin) {
   const text =
-    `🪙 <b>Send exactly this on Solana</b>\n\n` +
-    `<b>Amount:</b> <code>${amount}</code> ${coin}\n` +
+    `🪙 <b>Pay with ${coin} on Solana</b>\n\n` +
+    `<b>Amount:</b> <code>${amount}</code> ${coin}  <i>(tap to copy)</i>\n` +
     `<b>To:</b> <code>${esc(address)}</code>\n\n` +
-    `⚠️ Send the <b>EXACT</b> amount — the final digits identify your payment.\n` +
-    `⏱ Valid ~<b>${expiresMin}</b> min · credited automatically ~1 min after confirmation.\n` +
-    `<i>If it doesn't credit, send</i> <code>/pay &lt;tx signature&gt;</code>.`;
+    `✅ <b>Auto-confirmed by this EXACT amount.</b> The final digits are your unique code — that's how we detect <i>your</i> payment automatically, with no extra step.\n` +
+    `⚠️ Send it <b>to the last digit</b> — do <b>not</b> round or change it, or it won't auto-credit.\n` +
+    `⏱ Valid ~<b>${expiresMin}</b> min · credited within ~1 min of on-chain confirmation.\n` +
+    `<i>Didn't credit? Send</i> <code>/pay &lt;tx signature&gt;</code>.`;
   const keyboard = new InlineKeyboard()
     .text("⬅️ Change coin", `crypto:${kind}`).row()
     .text("🏠 Home", "home").text("ⓧ Close", "close");
