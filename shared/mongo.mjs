@@ -26,7 +26,9 @@ export const now = () => Date.now();
 
 async function ensureIndexes(db) {
   await db.collection("watches").createIndex({ handle: 1 });
-  await db.collection("watches").createIndex({ tg_id: 1, handle: 1 }, { unique: true });
+  // unique theo (tg_id, handle, PLATFORM) — cho phép cùng handle trên nhiều nền tảng (X + Truth + IG).
+  await db.collection("watches").createIndex({ tg_id: 1, handle: 1, platform: 1 }, { unique: true });
+  await db.collection("watches").dropIndex("tg_id_1_handle_1").catch(() => {});   // migrate: bỏ index cũ (thiếu platform -> chặn cross-platform gây E11000)
   await db.collection("referrals").createIndex({ referrer: 1 });
   await db.collection("referrals").createIndex({ referred: 1 });
   await db.collection("tracked_handles").createIndex({ x_user_id: 1 });

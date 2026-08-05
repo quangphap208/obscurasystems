@@ -268,8 +268,10 @@ bot.on("callback_query:data", async (ctx) => {
         const pl = await repo.getJ7Platforms();
         const list = platformDisplayList(p, (p === "truth" ? pl?.truth : pl?.ig) || []);
         for (const h of list) {
-          if (selectAll) await repo.addPlatformWatch(uid, h, p);
-          else await repo.removePlatformWatch(uid, h, p);
+          try {
+            if (selectAll) await repo.addPlatformWatch(uid, h, p);
+            else await repo.removePlatformWatch(uid, h, p);
+          } catch (e) { console.warn("[plat-all]", p, h, e.message); }   // 1 handle lỗi không chặn cả list
         }
         await showPlatform(ctx, p, true);
         return ctx.answerCallbackQuery(selectAll ? `Followed all (${list.length})` : "Cleared all");
