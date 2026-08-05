@@ -25,34 +25,41 @@ mà bạn net bằng/hơn Stars; hợp audience crypto-native).
 
 ## 2. Bảng giá đã chốt (hybrid: tier nền + pack cộng dồn)
 
-| Gói | Acc | Crypto | Stars | Bạn nhận (crypto) | Bạn nhận (Stars) |
+> **v2 (2026-08-05):** Free 3 vĩnh viễn · Pro $15/30 · Whale $40/100 · Stars = USD ×1.3 (+30%). Pack $6 còn đề xuất.
+
+| Gói | Acc | 🪙 Crypto | ⭐ Stars (+30%) | Bạn net crypto | Bạn net Stars |
 |---|---|---|---|---|---|
-| **Free** | 3 | – | – | – | – |
-| **Pro** ⭐ | 25 | **$7** | 500⭐ ($9.99) | ~$6.9 | ~$6.5 |
-| **Whale** | 100 | **$17** | 1200⭐ (~$24) | ~$16.8 | ~$15.6 |
-| **Pack +10 acc** | +10 | **$4** | 300⭐ (~$6) | ~$3.9 | ~$3.9 |
+| **Free** ♾️ | **3** (vĩnh viễn, không hết hạn) | $0 | – | – | – |
+| **Pro** ⭐ | **30** | **$15** | ~**1000⭐** (~$20) | ~$15 | ~$13 |
+| **Whale** | **100** | **$40** | ~**2600⭐** (~$52) | ~$40 | ~$34 |
+| **Pack +10 acc** | +10 | **$6** *(đề xuất, chưa chốt cứng)* | ~**400⭐** (~$8) | ~$6 | ~$5 |
 | **Whitelist** | admin | – | – | – | – |
 
-- Crypto rẻ hơn user **~30%** nhưng bạn **net bằng/hơn** Stars → win-win (bên "mất" là phí nền tảng Telegram).
-- Đòn bẩy mạnh nếu muốn: hạ crypto Pro xuống **$6.5** (= net Stars) → user tiết kiệm **35%**, bạn không thiệt.
+**Đơn giá/acc:** Whale **$0.40** < Pro **$0.50** < Pack **$0.60** — mua sỉ rẻ nhất, cam kết nền vừa, top-up lẻ nhỉnh hơn (chuẩn ladder SaaS).
+
+- **Stars = USD × 1.3** ("nudge" sang crypto; bù một phần ~35% phí nền tảng). Crypto vẫn net > Stars → incentive đúng hướng. Muốn Stars net **bằng** crypto thì ×1.54.
+- ⏱ **Đồng hồ hết hạn gói trả phí bắt đầu từ lần ADD account đầu tiên** (không phải lúc thanh toán) — tránh phí ngày chết. *(Edge: nâng cấp khi đã có account sẵn → tính ngay từ lúc mua. Xem §6.5.)*
 - `account_limit = tier_base + addon_packs×10`. Thêm field `users.addon_packs` (int).
-- Pack **cố tình đắt hơn/acc** để đẩy user lên Whale khi cần nhiều: breakpoint sạch ở **>45 acc** (2 pack = $18 ≈ Whale $19 mà chỉ 45 vs 100 acc). Pack dành cho top-up nhỏ 10–30 acc.
-- **Vẫn rẻ áp đảo**: kể cả pack đắt nhất ($0.5/acc) vẫn rẻ hơn Redacted $2/acc (4×), X-Alpha ~$6/acc (12×), Xanguard $0.7–1.9/acc (1.4–3.8×).
+- **Pack breakpoint (pack $6):** cần >~**70 acc** thì lên Whale rẻ hơn (5 pack = $30, Pro+5pack $45 > Whale $40). Pack lo top-up 30–70 acc.
+- **Vẫn rẻ áp đảo:** 15–30 KOL rẻ hơn Redacted **50–75%**; 100 acc rẻ **80%**. Đơn giá $0.40–0.60/acc — rẻ nhất thị trường.
 
 **Map config (khi code):**
 ```
-FREE_LIMIT=3
-PRO_LIMIT=25          PRO_PRICE_STARS=500    PRO_PRICE_USD=7
-WHALE_LIMIT=100       WHALE_PRICE_STARS=1200 WHALE_PRICE_USD=17   (tier mới)
-PACK_SIZE=10          PACK_PRICE_STARS=300   PACK_PRICE_USD=4     (add-on mới)
+FREE_LIMIT=3            # vĩnh viễn, expires_at=null
+PRO_LIMIT=30            PRO_PRICE_USD=15    PRO_PRICE_STARS=1000
+WHALE_LIMIT=100         WHALE_PRICE_USD=40  WHALE_PRICE_STARS=2600
+PACK_SIZE=10            PACK_PRICE_USD=6    PACK_PRICE_STARS=400    # đề xuất, chưa chốt cứng
+# Stars = USD × 1.3
+# expires_at gói trả phí tính từ lần ADD account đầu tiên, KHÔNG phải lúc trả tiền
 ```
 
 ---
 
-## 3. Cơ chế crypto đã chốt: **multi-coin · auto-poll + unique-amount**
+## 3. Cơ chế crypto đã chốt: **chỉ Solana · auto-poll + unique-amount**
 
-Rails chốt: **USDC-SOL + USDT-TRC20 + SOL native**. Xác minh: **auto-poll RPC + số tiền lẻ duy nhất**
-(non-custodial, **0% phí bên thứ 3**, giữ 100%).
+Rails chốt (v3.2, 2026-08-05): **CHỈ SOLANA**, nhận **3 coin** — **USDC-SPL + USDT-SPL** (stablecoin ≈$1) + **SOL native**.
+**Bỏ Tron/ERC20 vì fee thanh toán cao**; Solana phí ~$0, finality nhanh, hợp audience. 1 chain adapter + 1 ví.
+Xác minh: **auto-poll RPC + số tiền lẻ duy nhất** (non-custodial, **0% phí bên thứ 3**, giữ 100%).
 
 **3 phương án đã cân — chọn cái đầu:**
 
@@ -62,7 +69,7 @@ Rails chốt: **USDC-SOL + USDT-TRC20 + SOL native**. Xác minh: **auto-poll RPC
 | Processor (**NOWPayments**) | webhook | ~0.5% | thấp | hosted invoice, ổn nhất, thêm dependency, no-KYC gói cơ bản |
 | Manual `/pay <txhash>` + admin verify | ❌ | 0% | thấp nhất | đơn giản nhưng thủ công, có ma sát |
 
-Coin nên là **stablecoin (USDC/USDT)** để giá sub không trôi; **Solana** hợp audience (phí ~$0, finality nhanh).
+Ưu tiên **stablecoin (USDC/USDT-SPL)** để giá sub không trôi; SOL native tuỳ chọn (khoá tỉ giá lúc tạo invoice).
 
 ---
 
@@ -74,14 +81,15 @@ Coin nên là **stablecoin (USDC/USDT)** để giá sub không trôi; **Solana**
 ```
 User /subscribe
   → chọn phương thức: [⭐ Stars]  |  [🪙 Crypto (rẻ hơn ~30%)]
-  → nếu Crypto: chọn coin (USDC-SOL / USDT-TRON / SOL)
+  → nếu Crypto: chọn coin (USDC / USDT / SOL) — đều SPL/native trên Solana
   → tạo invoice: gán unique-amount → show địa chỉ + số tiền CHÍNH XÁC + đếm ngược 30'
   → poller dò chain mỗi ~25s → khớp (đúng địa chỉ + đúng số lẻ duy nhất) → credit tier + báo user
 ```
 
 **Cơ chế unique-amount (mấu chốt auto-match):**
-- **Stablecoin** (USDC/USDT, 6 decimals): giá gốc + số lẻ duy nhất/invoice. Pro $7 → user gửi `7.001`, `7.002`, … (≤999 invoice pending/coin cùng lúc — thừa sức). Khớp = đúng địa chỉ + đúng số lẻ.
-- **SOL native**: khoá tỉ giá $→SOL lúc tạo invoice (giữ 30') + tag lamport duy nhất, match có dung sai nhỏ.
+- **USDC / USDT-SPL** (stablecoin ≈$1, 6 decimals): số token = giá USD + số lẻ duy nhất/invoice. Pro $15 → user gửi `15.001`, `15.002`, … (≤999 invoice pending **mỗi coin** — thừa sức). Khớp = đúng địa chỉ + **đúng mint** (phân biệt USDC vs USDT) + đúng số lẻ.
+- **SOL native**: số SOL = giá USD ÷ giá SOL hiện tại (khoá 30') + tag lamport duy nhất, match có dung sai nhỏ.
+- **Quy đổi & credit theo giá USD gốc**: stablecoin 1:1 USD; SOL = USD ÷ giá SOL (**Jupiter price API**, khoá lúc tạo invoice). Credit tier + ref points **dựa trên `invoice.priceUSD`** (KHÔNG dùng số token thực nhận) → tránh nhiễu số lẻ / trượt giá SOL. Gọi `awardRefConvert({ amount: invoice.priceUSD, currency: coin, chargeId: txSig })`.
 - **Idempotency**: lưu tx signature đã khớp → không credit 2 lần.
 - **Late grace**: quá 30' vẫn khớp trong **24h** (tx chậm vẫn được cộng), sau đó mới nhả slot.
 - **Fallback**: giữ nút `/pay <txhash>` cho ca lệch số / user hỏi.
@@ -94,24 +102,24 @@ User /subscribe
 |---|---|
 | `shared/config.mjs` | giá crypto+Stars, địa chỉ nhận, RPC, window/tolerance |
 | `shared/repo.mjs` | collection `crypto_invoices` + CRUD + `applyPurchase` |
-| **`fe/crypto-pay.mjs`** (mới) | invoice + unique-amount + adapter Solana/Tron + poller loop + credit |
+| **`fe/crypto-pay.mjs`** (mới) | invoice + unique-amount + adapter Solana (Infura RPC) + poller loop + credit |
 | `fe/bot.mjs` | `/subscribe` 2 nhánh, chọn coin, invoice pack, start poller lúc boot |
 | `fe/screens.mjs` | màn chọn method/coin + màn "gửi X tới địa chỉ Y" |
 | `.env.example` | biến mới |
 
-**Env cần cung cấp:** `RECEIVE_SOL_ADDRESS`, `RECEIVE_TRON_ADDRESS`, `SOLANA_RPC_URL` (+Helius key), `TRONGRID_API_KEY`.
-**Mặc định sẽ dùng:** window **30'** hiển thị · match trễ **24h** · poll **25s/chain** · Solana RPC **Helius** (parsed tx) · Tron **TronGrid** · giá SOL **Jupiter price API** (khoá lúc tạo invoice) · contract mặc định USDC-SPL mint chuẩn + USDT-TRC20 `TR7NHq…` chuẩn.
+**Env cần cung cấp:** `RECEIVE_SOL_ADDRESS` (nhận cả USDC-SPL + SOL, cùng 1 ví), `SOLANA_RPC_URL` = **endpoint Infura Solana** (`https://solana-mainnet.infura.io/v3/<API_KEY>`), `INFURA_API_KEY`.
+**Mặc định sẽ dùng:** window **30'** hiển thị · match trễ **24h** · poll **~25s** · Solana RPC **Infura** (`getSignaturesForAddress` + `getTransaction` jsonParsed → đọc pre/post token balances match USDC/USDT-SPL/SOL) · giá SOL **Jupiter price API** (khoá lúc tạo invoice) · mint chuẩn: **USDC-SPL** `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` + **USDT-SPL** `Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB`.
 
 ---
 
 ## 6. Quyết định còn treo (chốt trước khi code `crypto-pay.mjs`)
 
 1. **Pack recurring hay one-time** — khuyến nghị **one-time đến hết hạn tier** (đơn giản, dễ hiểu) cho v1. *Chưa chốt.*
-2. **RPC provider** — Helius (SOL) + TronGrid (Tron) ok, hay endpoint riêng? *Chưa chốt.*
-3. **2 ví nhận** (SOL + Tron) — đã có chưa, hay để placeholder `FILL_ME`? *Chưa chốt.*
-4. **⚡ Tron vs ERC20** — research cũ chốt **Tron (USDT-TRC20)**; user (2026-08-05) nhắc *"usdt sol hoặc erc20"*.
-   Nếu muốn **ERC20 (Ethereum)** thay/thêm Tron → cần adapter chain thứ 3 (gas cao hơn, finality chậm hơn Tron/SOL).
-   **Cần chốt: Tron hay Ethereum (hay cả 2)** cho nhánh USDT. *Chưa chốt.*
+2. **✅ RPC provider — CHỐT: Infura** (Solana mainnet: `solana-mainnet.infura.io/v3/<key>`). Dùng `getSignaturesForAddress` + `getTransaction(jsonParsed)` để đọc pre/post token balances, tự parse (không cần enriched API kiểu Helius). (2026-08-05)
+3. **Ví nhận Solana** — đã có ví chưa (nhận cả USDC-SPL + SOL), hay để placeholder `FILL_ME`? *Chưa chốt.*
+4. **✅ Chain crypto — CHỐT: CHỈ SOLANA**, nhận **USDC-SPL + USDT-SPL + SOL native**. Bỏ Tron/ERC20 vì **fee thanh toán cao**. Stablecoin 1:1 USD, SOL quy đổi qua Jupiter (khoá 30'); credit theo `invoice.priceUSD`. (2026-08-05)
+5. **Đồng hồ gói trả phí** — ĐÃ CHỐT: bắt đầu từ **lần add account đầu tiên**. *Cần chốt edge:* user nâng cấp khi ĐÃ có account sẵn (vd Free→Pro) → tính ngay từ lúc mua (khuyến nghị), hay từ lần add kế tiếp?
+6. **Giá pack** — **$6/+10** (đề xuất). *Chưa xác nhận cứng.*
 
 ---
 
@@ -121,7 +129,7 @@ User /subscribe
 - [x] Ref points nối sẵn cho crypto (`awardRefConvert` currency-aware, `REF_POINTS_PER_USD`). **Xong (046bdfc).**
 - [ ] Tier Whale + Pack add-on (config + FE invoice + callback + screens).
 - [ ] `shared/repo.mjs`: collection `crypto_invoices` + `applyPurchase`.
-- [ ] `fe/crypto-pay.mjs`: invoice unique-amount + adapter Solana/Tron(/ERC20?) + poller + credit.
+- [ ] `fe/crypto-pay.mjs`: invoice unique-amount + adapter **Solana** (Infura RPC) + poller + credit.
 - [ ] `fe/bot.mjs`: `/subscribe` 2 nhánh + chọn coin + pack invoice + start poller lúc boot.
 - [ ] `fe/screens.mjs`: màn method/coin + màn "gửi X tới địa chỉ Y".
 - [ ] `.env`: điền ví nhận + RPC keys.
@@ -134,7 +142,7 @@ User /subscribe
 `repo.awardRefConvert(referred, { amount, currency, chargeId })` + `REF_POINTS_PER_USD` **đã ready**.
 Khi `crypto-pay.mjs` credit tier xong, gọi thêm:
 ```js
-await repo.awardRefConvert(buyerTgId, { amount: usdValue, currency: "USDT", chargeId: txSignature });
+await repo.awardRefConvert(buyerTgId, { amount: usdValue, currency: "USDC", chargeId: txSignature });
 ```
 → điểm ref cho thanh toán crypto tự chạy, idempotent theo `c:<txSignature>`. Xem thêm quy tắc điểm trong code
 `shared/repo.mjs` (§ ref points) — join +`REF_JOIN_POINTS`, convert +`amount × rate`.
@@ -147,8 +155,8 @@ Số từ trang bán của từng bên; **có thể đổi** — dùng để đ�
 
 | Sản phẩm | Mô hình | Giá/tháng | # acc | $/acc | Giao | Payment |
 |---|---|---|---|---|---|---|
-| **Obscura** ⭐ | flat + cap | **~$8** (Pro) | 25–30 | **$0.3** | TG | Stars (+crypto sắp có) |
-| **Redacted** (bot đang clone) | **per-account** | — | ∞ | **$2.00** | TG | crypto |
+| **Obscura** ⭐ | tier + pack | **$15** (Pro) / $40 (Whale) | 30 / 100 | **$0.4–0.5** | TG | Stars + crypto (sắp) |
+| **Redacted** (bot đang clone) | **per-account, min 5** | **$10** (sàn 5) → $2/acc | 5→∞ | **$2.00** | TG | crypto |
 | **X-Alpha** (xfollowtracker) | per-acc bucket | $30 / $70 / $100 / $225 | 5 / 10 / 16 / 40 | ~$6 | TG | crypto (BTC/ETH/USDC/SOL/USDT), no-KYC |
 | **X-Relay** | tier | $15 (Lite) / $30 (Solo) / $69 (Pro) | thấp | — | TG+DC | crypto (BTC/ETH/USDT/SOL/TON/LTC), 3d trial |
 | **Xanguard** | volume-discount | $19 → $349 (Starter 10 → Enterprise 500; free 1) | 10–500 | $0.7–1.9 | TG | **SOL only**, on-chain confirm |
@@ -156,8 +164,10 @@ Số từ trang bán của từng bên; **có thể đổi** — dùng để đ�
 | **TweetStream** | flat hi-floor | $199 → $499 (annual $139/$349) | 50–250 | $2–4 | **DC only** (no TG native) | card |
 | **TwitGram** | free | $0 | ít | $0 | TG | — |
 
-**Nhận định:** vùng giá "nóng" là **$15–70/tháng** (retail Telegram). Redacted **$2/acc** phạt power-user
-(15 KOL = $30). Obscura flat ~$8 ở **$0.3/acc** → rẻ nhất bảng, feature ngang X-Relay/X-Alpha.
+**Nhận định:** vùng giá "nóng" là **$15–70/tháng** (retail Telegram). **Redacted**: free chỉ **trial 5 acc/24h**,
+sau đó **$2/acc, min 5 ($10 sàn)** — KHÔNG có free-forever, phạt power-user (30 KOL = $60). Obscura: **Free 3
+vĩnh viễn** + Pro $15/30 ($0.50/acc) → rẻ hơn **50–80%** ở mức dùng thật, và free **bền hơn hẳn** (mãi vs 24h).
+Điểm mềm duy nhất: khúc **4–7 acc paid** (sàn $10 Redacted < Pro $15), nhưng Free 3 mãi đã che 1–3 acc.
 
 **4 archetype mô hình giá:** ① per-account tuyến tính (Redacted) · ② tier = bucket account, $/acc phẳng (X-Alpha)
 · ③ tier volume-discount, $/acc giảm dần (Xanguard, TweetStream) · ④ feature-gated (TweetStream replay,
@@ -171,3 +181,7 @@ rate-limit/độ trễ · support · add-on module bán rời.
 ## Changelog
 
 - **2026-08-05** — Tạo doc, tổng hợp lại toàn bộ research payment (dual-pay, bảng giá, cơ chế crypto auto-poll unique-amount, kiến trúc, đối thủ) từ transcript. Ghi 4 quyết định còn treo (incl. Tron vs ERC20). Ref-side đã nối sẵn.
+- **2026-08-05 (v2)** — Chốt giá mới: **Free 3 vĩnh viễn** · **Pro $15/30** · **Whale $40/100** · **Stars = USD ×1.3 (+30%)** · Pack **$6/+10** (đề xuất). Thêm quy tắc **đồng hồ gói trả phí tính từ lần add account đầu tiên** (§2, §6.5). Cập nhật model Redacted đúng thực tế: free **trial 5 acc/24h**, sau đó **$2/acc min 5 ($10 sàn)** (Appendix A). Điểm mềm 4–7 acc paid được ghi nhận.
+- **2026-08-05 (v3)** — Chốt crypto **CHỈ SOLANA** (USDC-SPL chính + SOL native), **bỏ Tron/ERC20 vì fee thanh toán cao**. Đơn giản hoá: 1 chain adapter + 1 ví `RECEIVE_SOL_ADDRESS`; bỏ `RECEIVE_TRON_ADDRESS`/`TRONGRID_API_KEY`. Cập nhật §3/§4/§5/§6.4/§7/§8. §6.4 chuyển từ "treo" → CHỐT.
+- **2026-08-05 (v3.1)** — Chốt **RPC provider = Infura** (Solana mainnet `solana-mainnet.infura.io/v3/<key>`), thay Helius. Env: `SOLANA_RPC_URL` (endpoint Infura) + `INFURA_API_KEY`. Dò tx bằng `getSignaturesForAddress`+`getTransaction(jsonParsed)`, tự parse pre/post token balances. §6.2 chuyển "treo" → CHỐT.
+- **2026-08-05 (v3.2)** — Nhận **3 coin trên Solana: USDC-SPL + USDT-SPL + SOL**. Quy đổi: stablecoin 1:1 USD; SOL = USD÷giá SOL (Jupiter, khoá 30'). **Credit tier + ref points theo `invoice.priceUSD`** (không dùng số token thực nhận). Match phân biệt theo **mint** (USDC vs USDT). Thêm mint USDT-SPL vào §5. Cập nhật §3/§4/§6.4.
