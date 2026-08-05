@@ -65,10 +65,13 @@ async function welcome(ctx, edit = false) {
 // ---------- /start (+ deep-link) ----------
 bot.command("start", async (ctx) => {
   const p = (ctx.match || "").trim();
-  let referredBy = null, qa = null;
-  if (/^\d+$/.test(p)) referredBy = Number(p);
+  let referredBy = null, qa = null, source = null;
+  const ms = p.match(/s[_-](\w{1,32})/i);          // nguồn/campaign: ?start=s_botX / s_ad_july (label có thể có _)
+  if (ms) source = ms[1].toLowerCase();
+  const mr = p.match(/^(\d{4,})/);                 // referral: tg_id ở ĐẦU payload (kết hợp được: 123_s_botX)
+  if (mr) referredBy = Number(mr[1]);
   else if (/^qa[\s_+]?/i.test(p)) qa = p.replace(/^qa[\s_+]?/i, "").replace(/^@/, "");
-  await repo.ensureUser(ctx.from.id, ctx.from.username || ctx.from.first_name, referredBy);
+  await repo.ensureUser(ctx.from.id, ctx.from.username || ctx.from.first_name, referredBy, source);
   if (referredBy) {
     const pts = await repo.recordReferralOnStart(referredBy, ctx.from.id);   // idempotent + chỉ nguồn first-touch
     if (pts > 0) notifyReferrer(referredBy, pts, "join");

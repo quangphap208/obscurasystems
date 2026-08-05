@@ -25,7 +25,7 @@ const settingsOf = (obj) => Object.fromEntries(SET_COLS.map((c) => [c, obj?.[c] 
 // ---------- users ----------
 export async function getUser(tgId) { return col("users").findOne({ _id: Number(tgId) }); }
 
-export async function ensureUser(tgId, username, referredBy = null) {
+export async function ensureUser(tgId, username, referredBy = null, source = null) {
   tgId = Number(tgId);
   const existing = await getUser(tgId);
   if (existing) {
@@ -42,6 +42,7 @@ export async function ensureUser(tgId, username, referredBy = null) {
   await col("users").insertOne({
     _id: tgId, tg_id: tgId, username: username || null, tier: "Free",
     account_limit: cfg.freeLimit, expires_at: now() + cfg.trialDays * 86400000, referred_by: ref, points: 0,
+    ref_source: source || null,   // nguồn/campaign (first-touch) từ deep-link ?start=s_<label>
     addon_packs: 0, expired_notified: false, created_at: now(), settings: { ...DEFAULTS },
   });
   if (ref && (await getUser(ref))) await addReferral(ref, tgId);
