@@ -89,7 +89,7 @@ bot.command("add", async (ctx) => {
   const u = await repo.ensureUser(ctx.from.id, ctx.from.username);
   if (await repo.getWatch(ctx.from.id, handle)) return ctx.reply(`Already watching <b>@${esc(handle)}</b>.`, HTML());
   const n = await repo.countWatches(ctx.from.id);
-  if (n >= (u.account_limit ?? 0)) return ctx.reply(`⚠️ You've reached the <b>${u.account_limit}</b>-account limit of your <b>${esc(u.tier)}</b> plan.${cfg.subsEnabled ? "\nUse /subscribe to upgrade." : ""}`, HTML());
+  if (n >= (u.account_limit ?? 0)) return ctx.reply(`⚠️ You've reached the <b>${u.account_limit}</b>-account limit of your <b>${esc(u.tier)}</b> plan.${cfg.subsEnabled ? `\nUse <b>/subscribe</b> to add a <b>+${cfg.packSize} pack</b> or upgrade to <b>Whale</b>.` : ""}`, HTML());
   const r = await resolveHandle(handle);
   if (r.found === false) return ctx.reply(`❌ <b>@${esc(handle)}</b> not found on X.`, HTML());
   await repo.addWatch(ctx.from.id, r.found ? r.handle : handle, r.xid || null);
@@ -153,24 +153,35 @@ bot.command("support", async (ctx) => {
 bot.command("subscribe", async (ctx) => {
   if (!cfg.subsEnabled) return ctx.reply(SUBS_OFF_MSG, HTML());
   const u = await repo.ensureUser(ctx.from.id, ctx.from.username);
-  await show(ctx, subscribeScreen(u, cfg.proPriceStars, cfg.proDays, cfg.proLimit));
+  await show(ctx, subscribeScreen(u, cfg));
 });
 
-async function sendProInvoice(ctx) {
+// Bảng gói Stars — payload = kind (pro/whale/pack) → successful_payment route qua repo.applyPurchase.
+const PLANS = {
+  pro:   { title: "Pro Subscription",   stars: () => cfg.proPriceStars,   desc: () => `Watch up to ${cfg.proLimit} accounts for ${cfg.proDays} days.`,   label: () => `Pro ${cfg.proDays}d` },
+  whale: { title: "Whale Subscription", stars: () => cfg.whalePriceStars, desc: () => `Watch up to ${cfg.whaleLimit} accounts for ${cfg.whaleDays} days.`, label: () => `Whale ${cfg.whaleDays}d` },
+  pack:  { title: "Account Pack",       stars: () => cfg.packPriceStars,  desc: () => `+${cfg.packSize} accounts, valid until your current plan expires.`,  label: () => `+${cfg.packSize} accounts` },
+};
+async function sendPlanInvoice(ctx, kind) {
   if (!cfg.subsEnabled) { await ctx.reply(SUBS_OFF_MSG, HTML()); return; }
+  const p = PLANS[kind]; if (!p) return;
+  if (kind === "pack" && !repo.isActive(await repo.getUser(ctx.from.id)))
+    return void ctx.reply("➕ Packs add accounts to a paid plan. Get <b>Pro</b> or <b>Whale</b> first.", HTML());
   const other = cfg.starsProviderToken ? { provider_token: cfg.starsProviderToken } : {};
-  await ctx.replyWithInvoice(
-    "Pro Subscription", `Watch up to ${cfg.proLimit} accounts for ${cfg.proDays} days.`,
-    "pro", "XTR", [{ label: `Pro ${cfg.proDays}d`, amount: cfg.proPriceStars }], other);
+  await ctx.replyWithInvoice(p.title, p.desc(), kind, "XTR", [{ label: p.label(), amount: p.stars() }], other);
 }
 bot.on("pre_checkout_query", (ctx) => ctx.answerPreCheckoutQuery(true).catch(() => {}));
 bot.on("message:successful_payment", async (ctx) => {
-  const pay = ctx.message.successful_payment;   // XTR: currency "XTR", total_amount = số Stars, telegram_payment_charge_id
-  await repo.setUserPlan(ctx.from.id, { tier: "Pro", accountLimit: cfg.proLimit, expiresAt: Date.now() + cfg.proDays * 86400000 });
+  const pay = ctx.message.successful_payment;   // XTR: currency "XTR", total_amount=Stars, invoice_payload=kind, telegram_payment_charge_id
+  const kind = pay.invoice_payload || "pro";
+  const res = await repo.applyPurchase(ctx.from.id, kind);
   await repo.markReferralSubscribed(ctx.from.id);
-  const res = await repo.awardRefConvert(ctx.from.id, { amount: pay.total_amount, currency: pay.currency, chargeId: pay.telegram_payment_charge_id });
-  if (res) notifyReferrer(res.referrer, res.points, "convert");
-  await ctx.reply(`✅ Payment successful! <b>Pro</b> plan for ${cfg.proDays} days, limit <b>${cfg.proLimit}</b> accounts.`, HTML());
+  const ref = await repo.awardRefConvert(ctx.from.id, { amount: pay.total_amount, currency: pay.currency, chargeId: pay.telegram_payment_charge_id });
+  if (ref) notifyReferrer(ref.referrer, ref.points, "convert");
+  const msg = kind === "pack"
+    ? `✅ Payment received! <b>+${cfg.packSize}</b> accounts added — new limit <b>${res?.account_limit ?? "updated"}</b>.`
+    : `✅ Payment successful! <b>${res?.tier ?? kind}</b> plan for ${res?.days ?? cfg.proDays} days, limit <b>${res?.account_limit ?? ""}</b> accounts.`;
+  await ctx.reply(msg, HTML());
 });
 
 // ---------- /grant (admin cấp Pro tay để test) ----------
@@ -246,9 +257,9 @@ bot.on("callback_query:data", async (ctx) => {
     if (data === "globalsettings") { await show(ctx, globalSettingsScreen(await repo.getGlobalSettings(uid)), true); return ctx.answerCallbackQuery("Viewing global settings"); }
     if (data === "subscribe") {
       if (!cfg.subsEnabled) { await ctx.reply(SUBS_OFF_MSG, HTML()); return ctx.answerCallbackQuery(); }
-      await show(ctx, subscribeScreen(await repo.getUser(uid), cfg.proPriceStars, cfg.proDays, cfg.proLimit), true); return ctx.answerCallbackQuery();
+      await show(ctx, subscribeScreen(await repo.getUser(uid), cfg), true); return ctx.answerCallbackQuery();
     }
-    if (data === "buy:pro") { await sendProInvoice(ctx); return ctx.answerCallbackQuery(); }
+    if (data === "buy:pro" || data === "buy:whale" || data === "buy:pack") { await sendPlanInvoice(ctx, data.slice(4)); return ctx.answerCallbackQuery(); }
 
     if (data.startsWith("acct:")) {
       const h = data.slice(5);

@@ -160,16 +160,21 @@ export function accountsScreen(watches) {
   return { text, keyboard: kb };
 }
 
-// /subscribe — bảng gói
-export function subscribeScreen(user, price, days, limit) {
+// /subscribe — bảng gói (Free/Pro/Whale + pack). Giá lấy từ cfg. Xem docs/PAYMENT_RESEARCH.md §2.
+export function subscribeScreen(user, c) {
   const text =
     `💎 <b>Subscribe</b>\n\n` +
-    `<b>Free</b> — watch a few accounts, basic features.\n\n` +
-    `<b>Pro</b> — <b>${price}</b> ⭐ / ${days} days\n` +
-    `• Watch up to <b>${limit}</b> accounts\n` +
-    `• Unlock every notification type\n\n` +
-    `Current status: <b>${esc(user?.tier || "Free")}</b> · Exp: <b>${fmtExp(user)}</b>`;
-  const keyboard = new InlineKeyboard().text(`⭐ Buy Pro (${price})`, "buy:pro").row().text("⬅️ Back", "home").text("ⓧ Close", "close");
+    `<b>Free</b> — <b>${c.freeLimit}</b> accounts, forever. Basic tracking.\n\n` +
+    `<b>Pro</b> — <b>${c.proPriceStars}</b>⭐ / ${c.proDays}d\n` +
+    `• Up to <b>${c.proLimit}</b> accounts · every notification type\n\n` +
+    `<b>Whale</b> — <b>${c.whalePriceStars}</b>⭐ / ${c.whaleDays}d\n` +
+    `• Up to <b>${c.whaleLimit}</b> accounts · best value per account\n\n` +
+    `<i>Need more? Add <b>+${c.packSize}</b> accounts for <b>${c.packPriceStars}</b>⭐ anytime (until your plan expires).</i>\n\n` +
+    `Current: <b>${esc(user?.tier || "Free")}</b> · Exp: <b>${fmtExp(user)}</b>`;
+  const keyboard = new InlineKeyboard()
+    .text(`⭐ Pro (${c.proPriceStars})`, "buy:pro").text(`⭐ Whale (${c.whalePriceStars})`, "buy:whale").row()
+    .text(`➕ Pack +${c.packSize} (${c.packPriceStars}⭐)`, "buy:pack").row()
+    .text("⬅️ Back", "home").text("ⓧ Close", "close");
   return { text, keyboard };
 }
 

@@ -127,8 +127,8 @@ User /subscribe
 
 - [x] Stars (XTR) — `/subscribe` invoice + `successful_payment` credit Pro. **Đang chạy.**
 - [x] Ref points nối sẵn cho crypto (`awardRefConvert` currency-aware, `REF_POINTS_PER_USD`). **Xong (046bdfc).**
-- [ ] Tier Whale + Pack add-on (config + FE invoice + callback + screens).
-- [ ] `shared/repo.mjs`: collection `crypto_invoices` + `applyPurchase`.
+- [x] **Phase 1**: Tier Whale + Pack add-on (config + `applyPurchase`/`addon_packs` + FE invoice/callback/screens). **Code xong.**
+- [ ] `shared/repo.mjs`: collection `crypto_invoices` (Phase 2).
 - [ ] `fe/crypto-pay.mjs`: invoice unique-amount + adapter **Solana** (Infura RPC) + poller + credit.
 - [ ] `fe/bot.mjs`: `/subscribe` 2 nhánh + chọn coin + pack invoice + start poller lúc boot.
 - [ ] `fe/screens.mjs`: màn method/coin + màn "gửi X tới địa chỉ Y".
@@ -153,15 +153,18 @@ await repo.awardRefConvert(buyerTgId, { amount: usdValue, currency: "USDC", char
 
 **Thứ tự:** P1 (Stars tier — ship liền, **không cần secret**) → P2 (crypto core) → P3 (crypto UX) → P4 (test/deploy). P2–P3 cần **ví Solana + Infura key**.
 
-### Phase 1 — Tier restructure qua Stars (không cần secret)
+### Phase 1 — Tier restructure qua Stars (không cần secret) — ✅ CODE XONG (chờ test live)
 Ship được ngay: Free/Pro/Whale + Pack bằng Stars, **đồng hồ tính từ ngày mua**.
-- [ ] `shared/config.mjs` + `.env.example`: `PRO_LIMIT=30 PRO_PRICE_STARS=1000 PRO_PRICE_USD=15`, `WHALE_LIMIT=100 WHALE_PRICE_STARS=2600 WHALE_PRICE_USD=40 WHALE_DAYS=30`, `PACK_SIZE=10 PACK_PRICE_STARS=400 PACK_PRICE_USD=6`.
-- [ ] `shared/repo.mjs`: users field **`addon_packs`** (int=0). `baseLimit(tier)` + `applyPurchase(tgId, kind)`:
+- [x] `shared/config.mjs` + `.env.example`: `PRO_LIMIT=30 PRO_PRICE_STARS=1000 PRO_PRICE_USD=15`, `WHALE_LIMIT=100 WHALE_PRICE_STARS=2600 WHALE_PRICE_USD=40 WHALE_DAYS=30`, `PACK_SIZE=10 PACK_PRICE_STARS=400 PACK_PRICE_USD=6`.
+- [x] `shared/repo.mjs`: users field **`addon_packs`** (int=0). `baseLimit(tier)` + `applyPurchase(tgId, kind)`:
   - `pro`/`whale`: set tier + `expires_at = now + days`, `addon_packs=0`, `account_limit = baseLimit(tier)`.
-  - `pack`: chỉ khi tier có phí còn hạn → `addon_packs++`, `account_limit = baseLimit(tier) + addon_packs*PACK_SIZE`.
-- [ ] `fe/screens.mjs`: `subscribeScreen` liệt kê **Free/Pro/Whale** + nút mua từng gói; màn "hết hạn mức" 2 nút **Mua Pack** / **Lên Whale**.
-- [ ] `fe/bot.mjs`: callback `buy:pro|buy:whale|buy:pack` → `sendInvoice` (payload=kind, amount = *_PRICE_STARS). `successful_payment`: đọc `invoice_payload` → `applyPurchase(uid, kind)` + `awardRefConvert` (đã có) + reply đúng gói. /add chạm limit → gợi ý Pack/Whale.
-- [ ] Verify: Pro→limit 30 + hạn 30d · Pack→+10 · Whale→100.
+  - `pack`: chỉ khi tier có phí còn hạn (`isActive`) → `addon_packs++`, `account_limit = baseLimit(tier) + addon_packs*PACK_SIZE`.
+- [x] `fe/screens.mjs`: `subscribeScreen(user, cfg)` liệt kê **Free/Pro/Whale** + nút mua từng gói + nút Pack.
+- [x] `fe/bot.mjs`: `PLANS` + `sendPlanInvoice(ctx, kind)`; callback `buy:pro|buy:whale|buy:pack`; `successful_payment` đọc `invoice_payload` → `applyPurchase` + `awardRefConvert` + reply đúng gói; /add chạm limit → gợi ý Pack/Whale.
+- [ ] **Deploy .env**: thêm `WHALE_*`, `PACK_*`, `PRO_PRICE_USD` vào VPS `.env`; chỉnh `FREE_LIMIT`/`PRO_LIMIT`/`PRO_PRICE_STARS` về số chốt nếu muốn (hiện .env đang FREE=15/PRO=40/500⭐). Bật `SUBS_ENABLED=1` khi mở bán.
+- [ ] Verify live: Pro→limit 30 + hạn 30d · Pack→+10 (cần tier còn hạn) · Whale→100.
+
+> ⚠️ **Known gap (chưa xử lý, tách task riêng):** khi gói hết hạn, `account_limit` KHÔNG tự tụt về Free (pre-existing từ flow Pro cũ). Cần task "expiry downgrade" (tụt limit + xử lý account vượt hạn) — không thuộc Phase 1.
 
 ### Phase 2 — Crypto core `fe/crypto-pay.mjs` (cần ví + Infura)
 - [ ] `shared/mongo.mjs`: collection `crypto_invoices` + index (`status`,`coin`, TTL `expires_at`).

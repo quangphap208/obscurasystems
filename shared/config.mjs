@@ -38,11 +38,19 @@ export const cfg = {
   sourceExclusive: process.env.SOURCE_EXCLUSIVE === "1",
   // thanh toán: Telegram Stars (XTR). providerToken rỗng = Stars; hoặc token nhà cung cấp khác.
   starsProviderToken: process.env.STARS_PROVIDER_TOKEN || "",
-  // giá / gói (có thể override qua env)
-  proPriceStars: Number(process.env.PRO_PRICE_STARS || 500),
+  // giá / gói (override qua env). Chi tiết + lý do: docs/PAYMENT_RESEARCH.md §2.
+  freeLimit: Number(process.env.FREE_LIMIT || 3),                 // Free: vĩnh viễn, không hết hạn
+  proLimit: Number(process.env.PRO_LIMIT || 30),
+  proPriceStars: Number(process.env.PRO_PRICE_STARS || 1000),     // ~$20 (USD×1.3)
+  proPriceUsd: Number(process.env.PRO_PRICE_USD || 15),           // giá crypto
   proDays: Number(process.env.PRO_DAYS || 30),
-  proLimit: Number(process.env.PRO_LIMIT || 25),
-  freeLimit: Number(process.env.FREE_LIMIT || 3),
+  whaleLimit: Number(process.env.WHALE_LIMIT || 100),
+  whalePriceStars: Number(process.env.WHALE_PRICE_STARS || 2600), // ~$52
+  whalePriceUsd: Number(process.env.WHALE_PRICE_USD || 40),
+  whaleDays: Number(process.env.WHALE_DAYS || 30),
+  packSize: Number(process.env.PACK_SIZE || 10),                  // add-on: +N acc, one-time đến hết hạn tier
+  packPriceStars: Number(process.env.PACK_PRICE_STARS || 400),    // ~$8
+  packPriceUsd: Number(process.env.PACK_PRICE_USD || 6),
   // --- Referral: GHI NHẬN points (quy đổi thưởng định sau). Cộng ở 2 mốc: join + convert(payment). ---
   refJoinPoints: Number(process.env.REF_JOIN_POINTS || 10),         // điểm khi 1 người MỚI join qua link
   refPointsPerStar: Number(process.env.REF_POINTS_PER_STAR || 0.1), // điểm / 1 Star referred chi (Telegram XTR)

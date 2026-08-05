@@ -40,7 +40,7 @@ export async function ensureUser(tgId, username, referredBy = null) {
   await col("users").insertOne({
     _id: tgId, tg_id: tgId, username: username || null, tier: "Free",
     account_limit: cfg.freeLimit, expires_at: null, referred_by: ref, points: 0,
-    created_at: now(), settings: { ...DEFAULTS },
+    addon_packs: 0, created_at: now(), settings: { ...DEFAULTS },
   });
   if (ref && (await getUser(ref))) await addReferral(ref, tgId);
   return getUser(tgId);
@@ -57,6 +57,34 @@ export async function setUserPlan(tgId, { tier, accountLimit, expiresAt } = {}) 
 
 export const isExpired = (u) => !u || !u.expires_at || u.expires_at < now();
 export const isActive = (u) => !!u && !!u.expires_at && u.expires_at >= now();
+
+// ---------- plans / purchase (Phase 1: Stars) — đồng hồ tính từ NGÀY MUA. docs/PAYMENT_RESEARCH.md §2/§9 ----------
+export function baseLimit(tier) {
+  if (tier === "Whale") return cfg.whaleLimit;
+  if (tier === "Pro") return cfg.proLimit;
+  return cfg.freeLimit;
+}
+// kind ∈ {pro, whale, pack}. Trả kết quả để bot báo user; null nếu user không tồn tại;
+// {error:"no_active_plan"} nếu mua pack khi KHÔNG có gói trả phí còn hạn.
+export async function applyPurchase(tgId, kind) {
+  tgId = Number(tgId);
+  const u = await getUser(tgId);
+  if (!u) return null;
+  if (kind === "pack") {
+    if (!isActive(u)) return { error: "no_active_plan" };               // pack chỉ cộng lên tier có phí còn hạn
+    const packs = (u.addon_packs || 0) + 1;
+    const limit = baseLimit(u.tier) + packs * cfg.packSize;
+    await col("users").updateOne({ _id: tgId }, { $set: { addon_packs: packs, account_limit: limit } });
+    return { kind, tier: u.tier, packs, account_limit: limit };
+  }
+  const tier = kind === "whale" ? "Whale" : "Pro";
+  const days = kind === "whale" ? cfg.whaleDays : cfg.proDays;
+  const limit = baseLimit(tier);
+  const expiresAt = now() + days * 86400000;
+  // mua / nâng cấp / gia hạn: reset packs (one-time đến hết hạn tier), đồng hồ từ NGÀY MUA.
+  await col("users").updateOne({ _id: tgId }, { $set: { tier, account_limit: limit, expires_at: expiresAt, addon_packs: 0 } });
+  return { kind, tier, account_limit: limit, expires_at: expiresAt, days };
+}
 
 // ---------- global settings (nhúng trong user.settings) ----------
 export async function getGlobalSettings(tgId) {
