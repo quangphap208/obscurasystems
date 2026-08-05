@@ -6,10 +6,11 @@ import { connect, close } from "../shared/mongo.mjs";
 import * as repo from "../shared/repo.mjs";
 import { byKey, GATE_TEXT } from "../shared/settings.mjs";
 import { resolveHandle, parseHandle } from "./xsearch.mjs";
-import { startPoller as startCryptoPoller } from "./crypto-pay.mjs";
+import { startPoller as startCryptoPoller, makeInvoice, verifyManual, cryptoEnabled } from "./crypto-pay.mjs";
 import {
   welcomeScreen, referralScreen, globalSettingsScreen, accountSettingsScreen,
   accountsScreen, subscribeScreen, platformScreen, platformDisplayList, esc,
+  paymentMethodScreen, cryptoCoinScreen, cryptoInvoiceScreen,
 } from "./screens.mjs";
 
 const PLATFORMS = new Set(["truth", "ig"]);
@@ -185,6 +186,28 @@ bot.on("message:successful_payment", async (ctx) => {
   await ctx.reply(msg, HTML());
 });
 
+// /pay <sig> — fallback: tự khớp 1 giao dịch crypto nếu auto-credit chưa tới. docs §9 Phase 3.
+bot.command("pay", async (ctx) => {
+  if (!cfg.subsEnabled) return ctx.reply(SUBS_OFF_MSG, HTML());
+  const sig = (ctx.match || "").trim();
+  if (!sig) return ctx.reply("Usage: <b>/pay &lt;transaction signature&gt;</b>\nUse this only if an auto-credit didn't arrive.", HTML());
+  await ctx.reply("🔎 Checking your transaction…", HTML());
+  const r = await verifyManual(bot, sig);
+  if (r.ok) return ctx.reply("✅ Payment found and credited. Thanks!", HTML());
+  const m = r.error === "no_match" ? "No matching pending invoice (wrong amount/coin, or already credited)."
+    : r.error === "tx_not_found" ? "Transaction not found yet — wait for confirmation and retry."
+    : r.error === "crypto_disabled" ? "Crypto payments aren't enabled."
+    : "Couldn't verify — please contact support.";
+  await ctx.reply("⚠️ " + m, HTML());
+});
+// map lỗi makeInvoice -> toast ngắn
+function cryptoErr(e) {
+  return e === "price_unavailable" ? "SOL price unavailable — try USDC/USDT."
+    : e === "too_many_pending" ? "Busy, try again in a moment."
+    : e === "crypto_disabled" ? "Crypto isn't available right now."
+    : "Couldn't create invoice, try again.";
+}
+
 // ---------- /grant (admin cấp Pro tay để test) ----------
 bot.command("grant", async (ctx) => {
   if (!isAdmin(ctx.from.id)) return;
@@ -260,7 +283,25 @@ bot.on("callback_query:data", async (ctx) => {
       if (!cfg.subsEnabled) { await ctx.reply(SUBS_OFF_MSG, HTML()); return ctx.answerCallbackQuery(); }
       await show(ctx, subscribeScreen(await repo.getUser(uid), cfg), true); return ctx.answerCallbackQuery();
     }
-    if (data === "buy:pro" || data === "buy:whale" || data === "buy:pack") { await sendPlanInvoice(ctx, data.slice(4)); return ctx.answerCallbackQuery(); }
+    if (data.startsWith("plan:")) {
+      const kind = data.slice(5);
+      if (cryptoEnabled()) { await show(ctx, paymentMethodScreen(kind, cfg), true); return ctx.answerCallbackQuery(); }
+      await sendPlanInvoice(ctx, kind); return ctx.answerCallbackQuery();          // crypto off -> Stars thẳng
+    }
+    if (data.startsWith("stars:")) { await sendPlanInvoice(ctx, data.slice(6)); return ctx.answerCallbackQuery(); }
+    if (data.startsWith("crypto:")) {
+      const kind = data.slice(7);
+      if (kind === "pack" && !repo.isActive(await repo.getUser(uid)))
+        { await ctx.reply("➕ Packs add accounts to a paid plan. Get <b>Pro</b> or <b>Whale</b> first.", HTML()); return ctx.answerCallbackQuery(); }
+      await show(ctx, cryptoCoinScreen(kind, cfg), true); return ctx.answerCallbackQuery();
+    }
+    if (data.startsWith("pc:")) {
+      const [, kind, coin] = data.split(":");
+      const r = await makeInvoice(uid, kind, coin);
+      if (!r.ok) return ctx.answerCallbackQuery(cryptoErr(r.error));
+      await show(ctx, cryptoInvoiceScreen(kind, r.coin, r.amount, r.address, cfg.cryptoWindowMin), true);
+      return ctx.answerCallbackQuery();
+    }
 
     if (data.startsWith("acct:")) {
       const h = data.slice(5);

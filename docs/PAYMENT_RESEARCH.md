@@ -129,10 +129,8 @@ User /subscribe
 - [x] Ref points nối sẵn cho crypto (`awardRefConvert` currency-aware, `REF_POINTS_PER_USD`). **Xong (046bdfc).**
 - [x] **Phase 1**: Tier Whale + Pack add-on (config + `applyPurchase`/`addon_packs` + FE invoice/callback/screens). **Code xong.**
 - [x] **Phase 2**: crypto core — `crypto_invoices` + `fe/crypto-pay.mjs` (invoice unique-amount + poller Infura + match/credit atomic). **Code xong, chờ test live.**
-- [ ] `fe/bot.mjs`: `/subscribe` 2 nhánh + chọn coin + pack invoice + start poller lúc boot.
-- [ ] `fe/screens.mjs`: màn method/coin + màn "gửi X tới địa chỉ Y".
-- [ ] `.env`: điền ví nhận + RPC keys.
-- [ ] `/pay <txhash>` fallback thủ công.
+- [x] **Phase 3**: UX wiring — `/subscribe`→method→coin→invoice screen + nudge "crypto better price" (không nêu số) + `/pay <sig>` fallback. **Code xong.**
+- [ ] `.env`: điền ví nhận + RPC key (Phase 4 deploy).
 
 ---
 
@@ -174,9 +172,9 @@ Ship được ngay: Free/Pro/Whale + Pack bằng Stars, **đồng hồ tính t�
   - `verifyManual(bot, sig)` cho `/pay` fallback (Phase 3 wiring).
 - [x] Poller **CHỈ chạy ở FE** (`startPoller(bot)` trước `bot.start`, `running` guard, no-op nếu chưa cấu hình) → no double-credit.
 
-### Phase 3 — Crypto UX + wiring
-- [ ] `fe/screens.mjs`: màn **method** (⭐ Stars / 🪙 Crypto) → **coin** (USDC/USDT/SOL) → **invoice** (địa chỉ copy + số tiền chính xác + đếm ngược 30').
-- [ ] `fe/bot.mjs`: `/subscribe` → gói → method; nhánh Crypto → coin → `makeInvoice` → màn invoice; **start poller lúc boot**; callback `pay:crypto:<kind>:<coin>`; **`/pay <txhash>`** fallback.
+### Phase 3 — Crypto UX + wiring — ✅ CODE XONG
+- [x] `fe/screens.mjs`: `paymentMethodScreen` (⭐ Stars / 🪙 Crypto — **nudge "better price", không nêu số**) → `cryptoCoinScreen` (USDC/USDT/SOL) → `cryptoInvoiceScreen` (địa chỉ `<code>` + số tiền chính xác + hạn + gợi ý `/pay`).
+- [x] `fe/bot.mjs`: `/subscribe` → `plan:<kind>` (crypto off → Stars thẳng; on → method) → `stars:` / `crypto:` → `pc:<kind>:<coin>` → `makeInvoice` → invoice screen. Poller start lúc boot (Phase 2). `/pay <sig>` → `verifyManual`. Pack (Stars & crypto) chặn khi chưa có tier còn hạn. Nudge chỉ hiện khi `cryptoEnabled`.
 
 ### Phase 4 — Test & deploy
 - [ ] Test số nhỏ thật mỗi coin: đúng số→credit · sai số lẻ→bỏ · gửi lại tx→không double.

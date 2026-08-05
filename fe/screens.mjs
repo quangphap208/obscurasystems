@@ -162,6 +162,7 @@ export function accountsScreen(watches) {
 
 // /subscribe — bảng gói (Free/Pro/Whale + pack). Giá lấy từ cfg. Xem docs/PAYMENT_RESEARCH.md §2.
 export function subscribeScreen(user, c) {
+  const crypto = !!(c.receiveSolAddress && c.solanaRpcUrl);   // chỉ nudge crypto khi đã bật
   const text =
     `💎 <b>Subscribe</b>\n\n` +
     `<b>Free</b> — <b>${c.freeLimit}</b> accounts, forever. Basic tracking.\n\n` +
@@ -169,12 +170,52 @@ export function subscribeScreen(user, c) {
     `• Up to <b>${c.proLimit}</b> accounts · every notification type\n\n` +
     `<b>Whale</b> — <b>${c.whalePriceStars}</b>⭐ / ${c.whaleDays}d\n` +
     `• Up to <b>${c.whaleLimit}</b> accounts · best value per account\n\n` +
-    `<i>Need more? Add <b>+${c.packSize}</b> accounts for <b>${c.packPriceStars}</b>⭐ anytime (until your plan expires).</i>\n\n` +
-    `Current: <b>${esc(user?.tier || "Free")}</b> · Exp: <b>${fmtExp(user)}</b>`;
+    `<i>Need more? Add <b>+${c.packSize}</b> accounts (${c.packPriceStars}⭐) anytime, until your plan expires.</i>\n` +
+    (crypto ? `<i>💡 Pay with crypto for a better price.</i>\n` : ``) +
+    `\nCurrent: <b>${esc(user?.tier || "Free")}</b> · Exp: <b>${fmtExp(user)}</b>`;
   const keyboard = new InlineKeyboard()
-    .text(`⭐ Pro (${c.proPriceStars})`, "buy:pro").text(`⭐ Whale (${c.whalePriceStars})`, "buy:whale").row()
-    .text(`➕ Pack +${c.packSize} (${c.packPriceStars}⭐)`, "buy:pack").row()
+    .text(`Pro · ${c.proLimit} acc`, "plan:pro").text(`Whale · ${c.whaleLimit} acc`, "plan:whale").row()
+    .text(`➕ Pack +${c.packSize} acc`, "plan:pack").row()
     .text("⬅️ Back", "home").text("ⓧ Close", "close");
+  return { text, keyboard };
+}
+
+// Chọn phương thức thanh toán — nudge crypto giá tốt (KHÔNG nêu số cụ thể).
+export function paymentMethodScreen(kind, c) {
+  const name = kind === "pack" ? `Pack +${c.packSize}` : kind === "whale" ? "Whale" : "Pro";
+  const text =
+    `💳 <b>${name} — choose how to pay</b>\n\n` +
+    `⭐ <b>Telegram Stars</b> — instant, in-app.\n` +
+    `🪙 <b>Crypto</b> — <b>better price</b> 💸 · USDC / USDT / SOL on Solana.`;
+  const keyboard = new InlineKeyboard()
+    .text("⭐ Pay with Stars", `stars:${kind}`).row()
+    .text("🪙 Crypto — better price 💸", `crypto:${kind}`).row()
+    .text("⬅️ Back", "subscribe").text("ⓧ Close", "close");
+  return { text, keyboard };
+}
+
+// Chọn coin (đều trên Solana)
+export function cryptoCoinScreen(kind, c) {
+  const name = kind === "pack" ? `Pack +${c.packSize}` : kind === "whale" ? "Whale" : "Pro";
+  const text = `🪙 <b>${name} — pay with crypto</b>\n\nAll on <b>Solana</b> (low fees, fast). Pick a coin:`;
+  const keyboard = new InlineKeyboard()
+    .text("USDC", `pc:${kind}:usdc`).text("USDT", `pc:${kind}:usdt`).text("SOL", `pc:${kind}:sol`).row()
+    .text("⬅️ Back", `plan:${kind}`).text("ⓧ Close", "close");
+  return { text, keyboard };
+}
+
+// Màn invoice: địa chỉ + số tiền CHÍNH XÁC + hạn. Số lẻ cuối = định danh giao dịch.
+export function cryptoInvoiceScreen(kind, coin, amount, address, expiresMin) {
+  const text =
+    `🪙 <b>Send exactly this on Solana</b>\n\n` +
+    `<b>Amount:</b> <code>${amount}</code> ${coin}\n` +
+    `<b>To:</b> <code>${esc(address)}</code>\n\n` +
+    `⚠️ Send the <b>EXACT</b> amount — the final digits identify your payment.\n` +
+    `⏱ Valid ~<b>${expiresMin}</b> min · credited automatically ~1 min after confirmation.\n` +
+    `<i>If it doesn't credit, send</i> <code>/pay &lt;tx signature&gt;</code>.`;
+  const keyboard = new InlineKeyboard()
+    .text("⬅️ Change coin", `crypto:${kind}`).row()
+    .text("🏠 Home", "home").text("ⓧ Close", "close");
   return { text, keyboard };
 }
 
