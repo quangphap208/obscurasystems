@@ -20,8 +20,9 @@ export function welcomeScreen(user, nWatched, botUser) {
     `Welcome to ${BOT_NAME}, <b>${esc(user?.username || "there")}</b> 👋\n\n` +
     `📊 Your plan:\n` +
     `• Tier: <b>${esc(user?.tier || "Free")}</b>\n` +
-    `• Limit: <b>${user?.account_limit ?? 0}</b> Accounts\n` +
-    `• Exp: <b>${fmtExp(user)}</b>\n\n` +
+    `• Limit: <b>${user?.account_limit ?? 0}</b> X accounts\n` +
+    `• Exp: <b>${fmtExp(user)}</b>\n` +
+    `✅ 📸 <b>Instagram</b> &amp; 🟣 <b>Truth Social</b>: full access — just enable (not counted in your X limit)\n\n` +
     `Current Accounts Watched:\n` +
     `• <i>X</i>: <b>${nWatched}</b>\n\n` +
     `💡 <b>/add</b> &amp; <b>/remove</b> <b>&lt;username&gt;</b> for X`;
@@ -172,6 +173,7 @@ export function subscribeScreen(user, c) {
     `• Up to <b>${c.proLimit}</b> accounts · every notification type\n\n` +
     `<b>Whale</b> — <b>${c.whalePriceStars}</b>⭐ / ${c.whaleDays}d\n` +
     `• Up to <b>${c.whaleLimit}</b> accounts · best value per account\n\n` +
+    `✅ 📸 <b>Instagram</b> &amp; 🟣 <b>Truth Social</b>: full access on <b>every</b> plan — just enable (limits above are for X only).\n\n` +
     `<i>Need more? Add <b>+${c.packSize}</b> accounts (${c.packPriceStars}⭐) anytime, until your plan expires.</i>\n` +
     (crypto ? `<i>💡 Pay with crypto for a better price.</i>\n` : ``) +
     `\nCurrent: <b>${esc(user?.tier || "Free")}</b> · Exp: <b>${fmtExp(user)}</b>`;
