@@ -13,22 +13,24 @@ import { connect, close, col } from "../shared/mongo.mjs";
 
 assertFE();
 
-const MSG = `🕶️ Obscura Systems — your all-in-one X tracker, right in Telegram.
+const MSG = `🕶️ Obscura Systems — track X, Truth Social & Instagram in one Telegram bot.
 
-One bot, every signal — the moment it happens:
-⚡ Tweets, replies, quotes, retweets — full text + media, never cut off
-🗑 Deleted tweets — with the original content
-📌 Pins/unpins · 👤 follows, profile / avatar / bio / banner changes · 🤝 affiliations · ⛔ suspensions
-🟣 Truth Social & 📸 Instagram too — not just X
+Every signal, the second it happens:
+⚡ Tweets · replies · quotes · retweets — FULL text + media, never cut off
+🗑 Deleted tweets — with the original content, not just "deleted"
+👤 Follows · profile / avatar / bio / banner · 🤝 affiliations · ⛔ suspensions · 📌 pins
+🟣 Truth Social & 📸 Instagram — included, no extra limit
 
-📩 Straight to your DM · 🎛 per-account settings · ➕ add by @username or link
-🛰 Fast & reliable — alerts in seconds, nothing slips through.
+Why testers stay:
+🛰 Alerts in seconds — nothing slips through
+💸 One flat price for many accounts (others bill per account)
+🪙 Pay with crypto for an even better price
 
-🧪 Private beta — 100% free while testing. At launch: 1/2–1/3 the price of other trackers.
-
+🎁 3-day FREE trial — 5 accounts, all features, no card.
 👉 @obscurasystemsbot → /start → /add elonmusk
 
-What's missing, too noisy, or would make you switch? Early testers get priority support + a launch discount. 🙌`;
+After the trial, keep everything for a fraction of what other trackers charge.
+Missing a feature or too noisy? Just reply — early users get priority support. 🙌`;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const API = `https://api.telegram.org/bot${cfg.botToken}`;
