@@ -5,6 +5,7 @@
 // Correctness: claimInvoice() (pending->paid atomic) chống double; sigSeen/markSigSeen chỉ đỡ re-parse.
 import { cfg } from "../shared/config.mjs";
 import * as repo from "../shared/repo.mjs";
+import { slackAlert } from "../shared/slack.mjs";
 
 const SOL_MINT = "So11111111111111111111111111111111111111112";
 // coin -> {decimals, mint(null=SOL), label, step lẻ (base units), dp hiển thị}
@@ -135,13 +136,41 @@ async function tryCredit(bot, sig, tx, wallet) {
   return null;
 }
 
+// ---- health check RPC (Infura live/dead) — che key khi log ----
+const maskUrl = (u) => { try { const x = new URL(u); const k = x.pathname.split("/").pop(); return `${x.host}/…${k && k.length > 4 ? k.slice(-4) : ""}`; } catch { return "(invalid url)"; } };
+async function probe(url) {
+  try {
+    const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getVersion" }) });
+    const j = await r.json();
+    return !!j.result;   // getVersion trả {solana-core,...} nếu URL/key OK
+  } catch { return false; }
+}
+// [{url, ok}] cho từng RPC — dùng ở boot + có thể gắn /admin.
+export async function checkRpcHealth() {
+  const out = [];
+  for (const u of cfg.solanaRpcUrls) out.push({ url: u, ok: await probe(u) });
+  return out;
+}
+async function alertOps(bot, text) {   // Slack (nếu bật) + DM admin
+  slackAlert(text);
+  for (const id of cfg.adminIds) { try { await bot.api.sendMessage(id, text); } catch {} }
+}
+
 // ---- poller (mỗi cryptoPollSec): quét TẤT CẢ ví ----
-let running = false;
+let running = false, rpcDownStreak = 0, rpcAlerted = false;
 export function startPoller(bot) {
   if (!cryptoEnabled()) { console.log("[crypto] TẮT (thiếu RECEIVE_SOL_ADDRESS / SOLANA_RPC_URL)"); return null; }
   console.log(`[crypto] poller ON — ${cfg.receiveSolAddresses.length} ví · ${cfg.solanaRpcUrls.length} RPC · mỗi ${cfg.cryptoPollSec}s`);
+  // Health probe lúc BOOT: bắt ngay URL sai / key chết (không phải đợi user báo).
+  checkRpcHealth().then((res) => {
+    res.forEach((r, i) => console.log(`[crypto] RPC #${i + 1} ${maskUrl(r.url)} ${r.ok ? "✓ live" : "✗ DEAD"}`));
+    const alive = res.filter((r) => r.ok).length;
+    if (alive === 0) alertOps(bot, `🔴 Crypto: TẤT CẢ ${res.length} RPC Solana DEAD — auto-credit KHÔNG chạy. Kiểm tra SOLANA_RPC_URL / Infura key: ${res.map((r) => maskUrl(r.url)).join(", ")}`);
+    else if (alive < res.length) alertOps(bot, `🟡 Crypto: ${res.length - alive}/${res.length} RPC Solana dead (còn ${alive} live).`);
+  }).catch(() => {});
   const tick = async () => {
     if (running) return; running = true;
+    let ok = false;   // có gọi được RPC tick này? (phát hiện RPC chết)
     try {
       await repo.expireStaleInvoices();
       for (const wallet of cfg.receiveSolAddresses) {
@@ -150,7 +179,7 @@ export function startPoller(bot) {
         let before, scanned = 0, stop = false;
         while (!stop && scanned < 300) {
           let sigs;
-          try { sigs = await rpc("getSignaturesForAddress", [wallet, before ? { limit: 100, before } : { limit: 100 }]); }
+          try { sigs = await rpc("getSignaturesForAddress", [wallet, before ? { limit: 100, before } : { limit: 100 }]); ok = true; }
           catch (e) { dbg("getSigs err", wallet.slice(0, 6), e.message); break; }
           if (!sigs || !sigs.length) break;
           for (const s of sigs) {
@@ -167,7 +196,12 @@ export function startPoller(bot) {
         }
       }
     } catch (e) { dbg("poll err", e.message); }
-    finally { running = false; }
+    finally {
+      // Alert RPC chết: gọi RPC fail N tick liên tiếp -> báo 1 lần (Slack+admin); hồi phục -> báo lại.
+      if (ok) { if (rpcAlerted) { alertOps(bot, "🟢 Crypto: RPC Solana đã hồi phục — auto-credit chạy lại."); rpcAlerted = false; } rpcDownStreak = 0; }
+      else if (++rpcDownStreak >= 3 && !rpcAlerted) { rpcAlerted = true; alertOps(bot, `🔴 Crypto: RPC Solana không phản hồi ${rpcDownStreak} lần liên tiếp — auto-credit đang GIÁN ĐOẠN. Kiểm tra Infura.`); }
+      running = false;
+    }
   };
   tick();
   return setInterval(tick, cfg.cryptoPollSec * 1000);
