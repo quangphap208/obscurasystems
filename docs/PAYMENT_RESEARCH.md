@@ -149,6 +149,40 @@ await repo.awardRefConvert(buyerTgId, { amount: usdValue, currency: "USDC", char
 
 ---
 
+## 9. Kế hoạch triển khai (phased)
+
+**Thứ tự:** P1 (Stars tier — ship liền, **không cần secret**) → P2 (crypto core) → P3 (crypto UX) → P4 (test/deploy). P2–P3 cần **ví Solana + Infura key**.
+
+### Phase 1 — Tier restructure qua Stars (không cần secret)
+Ship được ngay: Free/Pro/Whale + Pack bằng Stars, **đồng hồ tính từ ngày mua**.
+- [ ] `shared/config.mjs` + `.env.example`: `PRO_LIMIT=30 PRO_PRICE_STARS=1000 PRO_PRICE_USD=15`, `WHALE_LIMIT=100 WHALE_PRICE_STARS=2600 WHALE_PRICE_USD=40 WHALE_DAYS=30`, `PACK_SIZE=10 PACK_PRICE_STARS=400 PACK_PRICE_USD=6`.
+- [ ] `shared/repo.mjs`: users field **`addon_packs`** (int=0). `baseLimit(tier)` + `applyPurchase(tgId, kind)`:
+  - `pro`/`whale`: set tier + `expires_at = now + days`, `addon_packs=0`, `account_limit = baseLimit(tier)`.
+  - `pack`: chỉ khi tier có phí còn hạn → `addon_packs++`, `account_limit = baseLimit(tier) + addon_packs*PACK_SIZE`.
+- [ ] `fe/screens.mjs`: `subscribeScreen` liệt kê **Free/Pro/Whale** + nút mua từng gói; màn "hết hạn mức" 2 nút **Mua Pack** / **Lên Whale**.
+- [ ] `fe/bot.mjs`: callback `buy:pro|buy:whale|buy:pack` → `sendInvoice` (payload=kind, amount = *_PRICE_STARS). `successful_payment`: đọc `invoice_payload` → `applyPurchase(uid, kind)` + `awardRefConvert` (đã có) + reply đúng gói. /add chạm limit → gợi ý Pack/Whale.
+- [ ] Verify: Pro→limit 30 + hạn 30d · Pack→+10 · Whale→100.
+
+### Phase 2 — Crypto core `fe/crypto-pay.mjs` (cần ví + Infura)
+- [ ] `shared/mongo.mjs`: collection `crypto_invoices` + index (`status`,`coin`, TTL `expires_at`).
+- [ ] `shared/repo.mjs`: `createInvoice`, `listPending(coin)`, `markPaid(id,sig)`, `expireStale`, seen-sig (idempotency).
+- [ ] `fe/crypto-pay.mjs`:
+  - `makeInvoice(tgId, kind, coin)`: `price_usd` theo gói; stablecoin → `token_amount = price_usd + unique .00x` (không trùng pending cùng coin); SOL → `price_usd/solPrice(Jupiter, khoá)` + unique lamport.
+  - Poller ~25s: `getSignaturesForAddress(RECEIVE_SOL_ADDRESS)` (Infura) → sig mới → `getTransaction(jsonParsed)` → delta SOL (pre/postBalances) + SPL theo **mint** (pre/postTokenBalances) → match pending (address+mint+amount) → `applyPurchase` + `markPaid` + `awardRefConvert({amount:price_usd, currency:coin, chargeId:sig})` + notify. Idempotent theo sig. Late-grace 24h.
+- [ ] Poller **CHỈ chạy ở FE** (1 instance) → no double-credit.
+
+### Phase 3 — Crypto UX + wiring
+- [ ] `fe/screens.mjs`: màn **method** (⭐ Stars / 🪙 Crypto) → **coin** (USDC/USDT/SOL) → **invoice** (địa chỉ copy + số tiền chính xác + đếm ngược 30').
+- [ ] `fe/bot.mjs`: `/subscribe` → gói → method; nhánh Crypto → coin → `makeInvoice` → màn invoice; **start poller lúc boot**; callback `pay:crypto:<kind>:<coin>`; **`/pay <txhash>`** fallback.
+
+### Phase 4 — Test & deploy
+- [ ] Test số nhỏ thật mỗi coin: đúng số→credit · sai số lẻ→bỏ · gửi lại tx→không double.
+- [ ] Điền `.env` (ví + Infura key), `SUBS_ENABLED=1`, `pm2 restart kol-fe`.
+
+**Rủi ro:** unique-amount ≤999 pending/coin (log nếu chạm) · Infura rate-limit (cache sig) · SOL biến động → credit theo `price_usd` · secrets chỉ ở `.env`.
+
+---
+
 ## Appendix A — Research giá đối thủ (định vị thị trường, ~giữa 2026)
 
 Số từ trang bán của từng bên; **có thể đổi** — dùng để định vị, không quote chính xác cho khách.
