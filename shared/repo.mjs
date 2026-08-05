@@ -83,7 +83,30 @@ export async function applyPurchase(tgId, kind) {
   const expiresAt = now() + days * 86400000;
   // mua / nâng cấp / gia hạn: reset packs (one-time đến hết hạn tier), đồng hồ từ NGÀY MUA.
   await col("users").updateOne({ _id: tgId }, { $set: { tier, account_limit: limit, expires_at: expiresAt, addon_packs: 0 } });
+  await col("watches").updateMany({ tg_id: tgId, paused: true }, { $set: { paused: false } });   // gia hạn/nâng cấp -> BỎ pause
   return { kind, tier, account_limit: limit, expires_at: expiresAt, days };
+}
+
+// Sweep hạ gói HẾT HẠN -> Free (expiry-downgrade, cơ chế "pause"). docs/PAYMENT_RESEARCH.md §9.
+//   reset tier/limit/packs; giữ oldest freeLimit watch X ACTIVE, PAUSE phần vượt (BE bỏ qua khi gửi);
+//   gia hạn (applyPurchase) sẽ bỏ pause -> khôi phục tức thì, KHÔNG mất dữ liệu. Trả list để bot notify.
+export async function downgradeExpired() {
+  const expired = await col("users")
+    .find({ tier: { $ne: "Free" }, expires_at: { $ne: null, $lt: now() } })
+    .project({ _id: 1, tier: 1 }).toArray();
+  const out = [];
+  for (const u of expired) {
+    const tgId = u._id;
+    const xw = await col("watches").find({ tg_id: tgId, ...X_ONLY }).sort({ created_at: 1 }).project({ _id: 1 }).toArray();
+    const keep = xw.slice(0, cfg.freeLimit).map((w) => w._id);
+    const pause = xw.slice(cfg.freeLimit).map((w) => w._id);
+    if (keep.length) await col("watches").updateMany({ _id: { $in: keep } }, { $set: { paused: false } });
+    if (pause.length) await col("watches").updateMany({ _id: { $in: pause } }, { $set: { paused: true } });
+    // expires_at=null -> giống Free, không bị sweep lại
+    await col("users").updateOne({ _id: tgId }, { $set: { tier: "Free", account_limit: cfg.freeLimit, expires_at: null, addon_packs: 0 } });
+    out.push({ tgId, prevTier: u.tier, kept: keep.length, paused: pause.length });
+  }
+  return out;
 }
 
 // ---------- crypto invoices (Phase 2) — auto-poll + unique-amount. docs/PAYMENT_RESEARCH.md §4 ----------
@@ -126,7 +149,8 @@ export async function setGlobalSetting(tgId, colName, val) {
 // ---------- watches ----------
 export async function listWatches(tgId) { return col("watches").find({ tg_id: Number(tgId), ...X_ONLY }).sort({ created_at: 1 }).toArray(); }
 export async function getWatch(tgId, handle) { return col("watches").findOne({ _id: wid(tgId, handle) }); }
-export async function countWatches(tgId) { return col("watches").countDocuments({ tg_id: Number(tgId), ...X_ONLY }); }
+// đếm watch X ĐANG hoạt động (loại paused) -> free-user hạ gói vẫn quản được freeLimit slot.
+export async function countWatches(tgId) { return col("watches").countDocuments({ tg_id: Number(tgId), ...X_ONLY, paused: { $ne: true } }); }
 
 // Thêm watch. settings=null => KẾ THỪA global; chỉ tạo override khi user chỉnh riêng
 // account (setWatchSetting). Nhờ vậy bật/tắt ở Global Settings áp cho mọi account chưa customize.
@@ -161,7 +185,8 @@ export async function effectiveSettings(tgId, handle) {
 
 // Dispatcher: mọi user watch handle + settings hiệu lực (batch fetch settings user thiếu override).
 export async function watchersOfHandle(handle, platform = "x") {
-  const q = platform === "x" ? { handle: handle.toLowerCase(), ...X_ONLY } : { handle: handle.toLowerCase(), platform };
+  const base = platform === "x" ? { handle: handle.toLowerCase(), ...X_ONLY } : { handle: handle.toLowerCase(), platform };
+  const q = { ...base, paused: { $ne: true } };   // watch bị PAUSE (gói hết hạn) không nhận thông báo
   const rows = await col("watches").find(q).project({ tg_id: 1, settings: 1 }).toArray();
   const needUser = rows.filter((r) => !r.settings).map((r) => r.tg_id);
   let userSettings = {};

@@ -149,8 +149,10 @@ export function accountsScreen(watches) {
   if (!watches.length) {
     return { text: "You are not watching any accounts yet.\n\nUse <b>/add &lt;username&gt;</b> to add one.", keyboard: new InlineKeyboard().text("⬅️ Back", "home").text("ⓧ Close", "close") };
   }
+  const paused = watches.filter((w) => w.paused).length;
   const text = `👀 <b>Accounts You Watch</b> (${watches.length})\n\n` +
-    watches.map((w) => `• <b>@${esc(w.handle)}</b>`).join("\n") +
+    watches.map((w) => `• <b>@${esc(w.handle)}</b>${w.paused ? " ⏸ <i>paused</i>" : ""}`).join("\n") +
+    (paused ? `\n\n⏸ <b>${paused}</b> paused — no alerts. <b>/subscribe</b> to reactivate all.` : ``) +
     `\n\n<i>Tap ⚙️ to customize, 🗑 to unfollow.</i>`;
   const kb = new InlineKeyboard();
   for (const w of watches) {

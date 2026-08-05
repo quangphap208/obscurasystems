@@ -60,6 +60,8 @@ export const cfg = {
   cryptoWindowMin: Number(process.env.CRYPTO_WINDOW_MIN || 30),   // thời hạn hiển thị invoice (phút)
   cryptoLateGraceH: Number(process.env.CRYPTO_LATE_GRACE_H || 24),// vẫn khớp tx trễ trong N giờ
   cryptoPollSec: Number(process.env.CRYPTO_POLL_SEC || 25),       // chu kỳ dò chain (giây)
+  // Sweep hạ gói hết hạn -> Free + pause watch vượt Free (expiry-downgrade). docs/PAYMENT_RESEARCH.md §9.
+  expirySweepMin: Number(process.env.EXPIRY_SWEEP_MIN || 60),     // chu kỳ quét (phút). 0 vẫn chạy 60' (an toàn)
   // --- Referral: GHI NHẬN points (quy đổi thưởng định sau). Cộng ở 2 mốc: join + convert(payment). ---
   refJoinPoints: Number(process.env.REF_JOIN_POINTS || 10),         // điểm khi 1 người MỚI join qua link
   refPointsPerStar: Number(process.env.REF_POINTS_PER_STAR || 0.1), // điểm / 1 Star referred chi (Telegram XTR)

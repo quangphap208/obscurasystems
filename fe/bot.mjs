@@ -412,7 +412,28 @@ for (const id of cfg.adminIds)
   await bot.api.setMyCommands([...userCommands, ...adminCommands], { scope: { type: "chat", chat_id: id } }).catch((e) => console.warn("[admin menu]", id, e.message));
 console.log(`FE bot @${BOT_USER} running.`);
 
+// Sweep hạ gói hết hạn -> Free + pause watch vượt Free + báo user. Chạy ngay + mỗi expirySweepMin phút.
+function startExpirySweep() {
+  const run = async () => {
+    try {
+      const list = await repo.downgradeExpired();
+      for (const d of list) {
+        try {
+          await bot.api.sendMessage(d.tgId,
+            `⌛ Your <b>${esc(d.prevTier)}</b> plan has expired — you're back on <b>Free</b> (${cfg.freeLimit} accounts).` +
+            (d.paused ? `\n<b>${d.paused}</b> account(s) are <b>paused</b> (no alerts). Use /subscribe to reactivate all instantly.` : ``),
+            { parse_mode: "HTML" });
+        } catch {}
+      }
+      if (list.length) console.log(`[expiry] downgraded ${list.length} user(s)`);
+    } catch (e) { console.warn("[expiry]", e.message); }
+  };
+  run();
+  setInterval(run, cfg.expirySweepMin * 60000);
+}
+
 process.once("SIGINT", async () => { await bot.stop(); await close(); process.exit(0); });
 process.once("SIGTERM", async () => { await bot.stop(); await close(); process.exit(0); });
+startExpirySweep();       // expiry-downgrade: hạ gói hết hạn + pause watch vượt Free
 startCryptoPoller(bot);   // Phase 2: dò thanh toán crypto (no-op nếu chưa cấu hình ví/RPC)
 await bot.start({ onStart: () => console.log("polling…") });
