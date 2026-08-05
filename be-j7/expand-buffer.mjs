@@ -3,13 +3,14 @@
 //      media rỗng, đôi khi SAI type (TWEET nhưng thật ra QUOTE).
 //   2) event `tweet_update` cờ `isExpandedUpdate:true` = ĐẦY ĐỦ: full text + media + đúng type + quotedTweet.
 // j7-kol + build-bot cũ DROP mọi update -> mất bản đầy đủ. Buffer này: GIỮ bản cắt ~WAIT ms, thay bằng
-// expansion khi tới (huỷ bản cắt). Expansion không tới -> gửi bản cắt (fallback, gate lo nhường Bloom).
+// expansion khi tới (huỷ bản cắt). Expansion không tới -> `fetchFull` fxtwitter (§8 J7_TRUNCATION.md:
+// ~19% tweet cắt server KHÔNG BAO GIỜ sinh expansion) -> vẫn fail mới gửi bản cắt (gate lo nhường Bloom).
 // Tweet KHÔNG cắt -> gửi NGAY (không trễ). `dispatched` TTL 60s: bỏ expansion tới trễ của tweet đã gửi
 // (tránh dup do reclassify type: tweet:id vs quote:id là 2 dedupKey khác nhau).
 import { J7_TRUNCATED } from "../be-core/events.mjs";
 const WAIT_MS = 3000;
 
-export function makeExpandBuffer({ dispatch }) {
+export function makeExpandBuffer({ dispatch, fetchFull }) {
   const pending = new Map();     // tweetId -> timer (bản cắt đang đợi expansion)
   const dispatched = new Map();  // tweetId -> timer quên (đã gửi -> bỏ expansion trễ)
 
@@ -31,9 +32,15 @@ export function makeExpandBuffer({ dispatch }) {
       cancelPending(id);
       console.log(`[j7-buf] hold @${ev.actor || "?"} ${ev.kind} — đợi expansion (${WAIT_MS}ms)`);
       pending.set(id, setTimeout(() => {
-        pending.delete(id); markSent(id);
-        console.log(`[j7-buf] @${ev.actor || "?"} KHÔNG có expansion sau ${WAIT_MS}ms -> bản cắt (fallback -> gate/Bloom)`);
-        dispatch(ev);
+        pending.delete(id); markSent(id);   // markSent TRƯỚC khi fetch: expansion tới trong lúc fetch -> bỏ (không dup)
+        if (!fetchFull) {
+          console.log(`[j7-buf] @${ev.actor || "?"} KHÔNG có expansion sau ${WAIT_MS}ms -> bản cắt (fallback -> gate/Bloom)`);
+          return dispatch(ev);
+        }
+        Promise.resolve(fetchFull(ev)).then((full) => {
+          if (full) { console.log(`[j7-fx] @${ev.actor || "?"} ${ev.kind} không expansion -> fxtwitter ✓ (bản đầy đủ)`); dispatch(full); }
+          else { console.log(`[j7-fx] @${ev.actor || "?"} ${ev.kind} không expansion, fxtwitter ✗ -> bản cắt (fallback -> gate/Bloom)`); dispatch(ev); }
+        }).catch(() => dispatch(ev));
       }, WAIT_MS));
     },
     // isExpandedUpdate (đã normalize thành tweet đầy đủ) -> thay bản cắt đang đợi.

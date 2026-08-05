@@ -118,8 +118,8 @@ Commit liên quan: `2c3ef3a` (retweet), `63b616e` (buffer), `fa4db7b` (retweet-a
 | `[j7-buf] hold @X reply — đợi expansion (3000ms)` | Buffer giữ tweet cắt, chờ expansion |
 | `[j7-buf] @X expansion ✓ -> gửi bản ĐẦY ĐỦ (j7 tự render)` | ✅ **j7 tự render đầy đủ** — kết quả mong muốn |
 | `[j7-buf] @X KHÔNG có expansion sau 3000ms -> bản cắt (fallback)` | Không expansion + KHÔNG có fxtwitter fallback → gửi bản cắt |
-| `[j7-fx] @X kind không expansion -> fxtwitter ✓ (bản đầy đủ)` | §8: fetch fxtwitter OK → gửi bản đầy đủ (hiện: j7-kol) |
-| `[j7-fx] @X kind không expansion, fxtwitter ✗ -> bản cắt (fallback)` | §8: fxtwitter fail → mới gửi bản cắt (hiện: j7-kol) |
+| `[j7-fx] @X kind không expansion -> fxtwitter ✓ (bản đầy đủ)` | §8: fetch fxtwitter OK → gửi bản đầy đủ (cả 2 repo) |
+| `[j7-fx] @X kind không expansion, fxtwitter ✗ -> bản cắt (fallback -> gate/Bloom)` | §8: fxtwitter fail → mới gửi bản cắt (cả 2 repo) |
 | `[j7-gate] tweet cắt @X -> nhường Bloom (không gửi bản j7)` | Gate (build-bot): bỏ bản j7 cắt, Bloom bù |
 
 **Delivery không hỏng** ở mọi nhánh: user luôn nhận bản đầy đủ (j7 tự render hoặc Bloom bù).
@@ -177,7 +177,7 @@ Quy tắc: sửa phần render/normalize j7 nào thì áp cho **CẢ 2 repo**.
 
 ---
 
-## 8. Fix TRIỆT ĐỂ — fallback fetch fxtwitter (chốt 05-08-2026 · ✅ j7-kol-router · ⏳ build-bot)
+## 8. Fix TRIỆT ĐỂ — fallback fetch fxtwitter (chốt 05-08-2026 · ✅ j7-kol-router · ✅ build-bot)
 
 ~19% miss là **từ nguồn và vĩnh viễn** (§2.4) → nhánh fallback phải **tự vá** thay vì gửi bản cắt:
 hết `WAIT_MS` không có expansion → `GET https://api.fxtwitter.com/status/<id>` → dựng lại event đầy đủ
@@ -191,7 +191,7 @@ hết `WAIT_MS` không có expansion → `GET https://api.fxtwitter.com/status/<
   lẫn **type sai** (tweet→quote).
 
 Tần suất fallback thực đo ~3.5 lần/phút toàn feed — nhẹ với API công khai (repo vốn đã dùng fxtwitter
-cho preview). **Trạng thái**: ✅ j7-kol-router (`lib/fxfetch.mjs` + `makeExpandBuffer({ fetchFull })` →
-hết `WAIT_MS` gọi `fetchFull(ev)`, fail mới gửi bản cắt); ⏳ **build-bot CHƯA có** —
-`be-j7/expand-buffer.mjs` chưa nhận `fetchFull` nên vẫn rơi vào gate/bản-cắt. Cần sync sang build-bot
-(quy tắc §6): thêm `be-j7/fxfetch.mjs` + truyền `fetchFull` vào buffer ở `be-j7/engine-j7.mjs`.
+cho preview). **Trạng thái**: ✅ CẢ 2 repo — `lib/fxfetch.mjs` (j7-kol) / `be-j7/fxfetch.mjs` (build-bot):
+`mapFxTweet` PURE + `fetchFullTweet` timeout 4s; `makeExpandBuffer({ fetchFull })` → hết `WAIT_MS` gọi
+`fetchFull(ev)`, fail mới gửi bản cắt (build-bot: rồi mới tới gate nhường Bloom). `fxfetch.mjs`
+source-agnostic (chỉ thao tác canonical event) nên copy verbatim giữa 2 repo.

@@ -16,6 +16,7 @@ import { loadToken, saveToken, sessionCheck, daysLeft } from "./session.mjs";
 import { slackAlert } from "../shared/slack.mjs";
 import { makeFeedWatchdog } from "../be-core/watchdog.mjs";
 import { makeExpandBuffer } from "./expand-buffer.mjs";
+import { fetchFullTweet } from "./fxfetch.mjs";
 
 assertBE();
 if (!cfg.j7Session) { console.error("❌ Thiếu J7_SESSION_TOKEN trong .env — BE j7 không chạy."); await slackAlert("❌ *j7* BE: thiếu J7_SESSION_TOKEN — không chạy."); process.exit(1); }
@@ -32,8 +33,9 @@ let token = loadToken(TOKEN_FILE, cfg.j7Session);
 const dispatch = makeDispatcher({ tg, getBotUser: () => botUser, warmupUntil: Date.now() + WARMUP_MS });
 // watchdog: mỗi event feed j7 -> touch(); im lặng > feedSilenceMin phút -> Slack (socket treo ngầm).
 const watchdog = makeFeedWatchdog({ source: "j7", silenceMinutes: cfg.feedSilenceMin, tg, adminIds: cfg.adminIds });
-// buffer 2 pha: tweet `tweet` (snapshot cắt) -> đợi `tweet_update` isExpandedUpdate (đầy đủ) thay thế.
-const buf = makeExpandBuffer({ dispatch });
+// buffer 2 pha: tweet `tweet` (snapshot cắt) -> đợi `tweet_update` isExpandedUpdate (đầy đủ) thay thế;
+// không có expansion -> fetch fxtwitter (§8 docs/J7_TRUNCATION.md) -> vẫn fail mới gửi bản cắt (gate).
+const buf = makeExpandBuffer({ dispatch, fetchFull: fetchFullTweet });
 const TWEET_KINDS = new Set(["tweet", "retweet", "quote", "reply"]);
 
 function onEvent(raw, kind) {
