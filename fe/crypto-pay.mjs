@@ -145,16 +145,25 @@ export function startPoller(bot) {
     try {
       await repo.expireStaleInvoices();
       for (const wallet of cfg.receiveSolAddresses) {
-        let sigs; try { sigs = await rpc("getSignaturesForAddress", [wallet, { limit: 25 }]); }
-        catch (e) { dbg("getSigs err", wallet.slice(0, 6), e.message); continue; }
-        for (const s of sigs || []) {
-          if (s.err) continue;
-          if (await repo.sigSeen(s.signature)) continue;
-          let tx; try { tx = await rpc("getTransaction", [s.signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }]); }
-          catch (e) { dbg("getTx err", e.message); continue; }   // lỗi RPC -> chưa mark seen -> retry sau
-          if (!tx) continue;
-          try { await tryCredit(bot, s.signature, tx, wallet); } catch (e) { dbg("credit err", e.message); }
-          await repo.markSigSeen(s.signature);
+        // Catch-up: phân trang từ MỚI->CŨ tới khi gặp sig ĐÃ xử lý (sigSeen bền qua restart nhờ Mongo)
+        // -> KHÔNG bỏ sót payment kể cả bot down lâu + burst. Cap chặn quét vô hạn lần đầu (seen rỗng).
+        let before, scanned = 0, stop = false;
+        while (!stop && scanned < 300) {
+          let sigs;
+          try { sigs = await rpc("getSignaturesForAddress", [wallet, before ? { limit: 100, before } : { limit: 100 }]); }
+          catch (e) { dbg("getSigs err", wallet.slice(0, 6), e.message); break; }
+          if (!sigs || !sigs.length) break;
+          for (const s of sigs) {
+            if (await repo.sigSeen(s.signature)) { stop = true; break; }   // tới cái đã xử lý -> đã bắt hết cái mới
+            if (!s.err) {
+              let tx; try { tx = await rpc("getTransaction", [s.signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }]); }
+              catch (e) { dbg("getTx err", e.message); continue; }   // lỗi RPC -> chưa mark seen -> thử lại tick sau
+              if (tx) { try { await tryCredit(bot, s.signature, tx, wallet); } catch (e) { dbg("credit err", e.message); } }
+            }
+            await repo.markSigSeen(s.signature);
+          }
+          before = sigs[sigs.length - 1].signature;
+          scanned += sigs.length;
         }
       }
     } catch (e) { dbg("poll err", e.message); }

@@ -80,8 +80,10 @@ export async function applyPurchase(tgId, kind) {
   const tier = kind === "whale" ? "Whale" : "Pro";
   const days = kind === "whale" ? cfg.whaleDays : cfg.proDays;
   const limit = baseLimit(tier);
-  const expiresAt = now() + days * 86400000;
-  // mua / nâng cấp / gia hạn: reset packs (one-time đến hết hạn tier), đồng hồ từ NGÀY MUA.
+  // GIA HẠN STACK: cộng dồn thời gian CÒN LẠI (gia hạn sớm không mất ngày). Mua mới/hết hạn = từ NGÀY MUA.
+  const from = u.expires_at && u.expires_at > now() ? u.expires_at : now();
+  const expiresAt = from + days * 86400000;
+  // reset packs (one-time đến hết hạn tier).
   await col("users").updateOne({ _id: tgId }, { $set: { tier, account_limit: limit, expires_at: expiresAt, addon_packs: 0 } });
   await col("watches").updateMany({ tg_id: tgId, paused: true }, { $set: { paused: false } });   // gia hạn/nâng cấp -> BỎ pause
   return { kind, tier, account_limit: limit, expires_at: expiresAt, days };
