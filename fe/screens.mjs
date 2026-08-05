@@ -21,7 +21,7 @@ export function welcomeScreen(user, nWatched, botUser) {
     `📊 Your plan:\n` +
     `• Tier: <b>${esc(user?.tier || "Free")}</b>\n` +
     `• Limit: <b>${user?.account_limit ?? 0}</b> X accounts\n` +
-    `• Exp: <b>${fmtExp(user)}</b>\n` +
+    `• Exp: <b>${fmtExp(user)}</b>\n\n` +
     `✅ 📸 <b>Instagram</b> &amp; 🟣 <b>Truth Social</b>: full access — just enable (not counted in your X limit)\n\n` +
     `Current Accounts Watched:\n` +
     `• <i>X</i>: <b>${nWatched}</b>\n\n` +
