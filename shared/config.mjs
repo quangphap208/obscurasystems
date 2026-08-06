@@ -76,6 +76,9 @@ export const cfg = {
   profilePollMs: Number(process.env.PROFILE_POLL_MS || 120000),   // fallback 2 phút (feed-driven lo real-time)
   // /subscribe: MẶC ĐỊNH TẮT (giai đoạn test). Đặt SUBS_ENABLED=1 khi mở bán Pro.
   subsEnabled: process.env.SUBS_ENABLED === "1",
+  // CTA ref-forward (link "🕶 Try Obscura free" trong thân alert, sống-sót khi forward). MẶC ĐỊNH TẮT
+  // (đang research). Bật REF_FWD_CTA=1 khi mở lại — không cần đổi code.
+  refForwardCta: process.env.REF_FWD_CTA === "1",
   // --- BE j7 (nguồn thứ 2, chạy song song Bloom) — auth JWT socket, KHÁC Bloom hoàn toàn (xem be-j7/). ---
   j7Host: process.env.J7_HOST || "https://nyc.j7tracker.io",   // host socket + /api/session-check
   j7Session: process.env.J7_SESSION_TOKEN || "",               // JWT gốc = localStorage.sessionId trên j7tracker.io

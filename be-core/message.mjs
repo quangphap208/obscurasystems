@@ -54,11 +54,13 @@ const PLAT = {
   truth: { emoji: "🟣", verb: "posted on Truth",     btn: "View on Truth" },
   ig:    { emoji: "📸", verb: "posted on Instagram", btn: "View on Instagram" },
 };
-// Nút CTA ref gắn cuối mỗi alert (hàng URL RIÊNG). Khi user forward tin ra group/bạn bè, URL button
-// SỐNG-SÓT (callback "del" bị Telegram strip) -> stranger bấm được. Payload `<refId>_s_fwd` FE parse
-// ĐƯỢC cả referral(=refId, forwarder nhận join-points) LẪN source("fwd", đo kênh forward). refId=null -> ẩn (whitelist).
-function refRow(botUser, refId) {
-  return (botUser && refId) ? [{ text: "🕶 Try Obscura free", url: `https://t.me/${botUser}?start=${refId}_s_fwd` }] : null;
+// CTA ref đặt TRONG THÂN TIN (text_link), KHÔNG phải inline button: tin DM khi user forward ra ngoài
+// bị Telegram STRIP toàn bộ inline keyboard (kể cả nút URL — nút chỉ sống khi forward bài CHANNEL).
+// Chỉ text + entities sống sót -> link chữ mới đi theo forward. Payload `<refId>_s_fwd` FE parse ĐƯỢC cả
+// referral(=refId, forwarder nhận join-points) LẪN source("fwd"). Explicit link_preview_options -> footer
+// không cướp preview. refId=null -> không gắn.
+function refFooter(botUser, refId) {
+  return (botUser && refId) ? `\n\n🕶 <a href="https://t.me/${botUser}?start=${refId}_s_fwd">Try Obscura free</a>` : "";
 }
 
 function buildPlatformMessage(e, { deleteButton = true, botUser, refId = null } = {}) {
@@ -86,13 +88,10 @@ function buildPlatformMessage(e, { deleteButton = true, botUser, refId = null } 
     : e.postUrl ? { url: e.postUrl, show_above_text: true, prefer_large_media: true }
     : { is_disabled: true };
 
-  const rows = [];
   const row = [];
   if (deleteButton) row.push({ text: "🗑 Delete", callback_data: "del" });
   if (e.postUrl) row.push({ text: p.btn, url: e.postUrl });
-  if (row.length) rows.push(row);
-  const rr = refRow(botUser, refId); if (rr) rows.push(rr);
-  return { text, link_preview_options: lpo, reply_markup: rows.length ? { inline_keyboard: rows } : undefined };
+  return { text: text + refFooter(botUser, refId), link_preview_options: lpo, reply_markup: row.length ? { inline_keyboard: [row] } : undefined };
 }
 
 // Dựng { text(HTML), link_preview_options, reply_markup } cho Bot API.
@@ -166,8 +165,7 @@ export function buildMessage(e, { botUser, deleteButton = true, refId = null } =
     if (e.tweetId && author) row.push({ text: "View Tweet", url: `https://x.com/${author}/status/${e.tweetId}` });
     if (row.length) rows.push(row);
   }
-  const rr = refRow(botUser, refId); if (rr) rows.push(rr);
-  return { text, link_preview_options: lpo, reply_markup: rows.length ? { inline_keyboard: rows } : undefined };
+  return { text: text + refFooter(botUser, refId), link_preview_options: lpo, reply_markup: rows.length ? { inline_keyboard: rows } : undefined };
 }
 
 export { ACT, esc };

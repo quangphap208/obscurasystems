@@ -113,8 +113,9 @@ export function makeDispatcher({ tg, getBotUser, warmupUntil = 0 }) {
         if (!settings[colKey]) continue;                // user tắt loại này
         if (!(await repo.markDelivered(key, tgId, e.source))) continue; // đã gửi/nguồn kia thắng (hoặc nguồn kia thắng)
         const ev = applyMediaFilter(e, settings);
-        // refId = tg_id chính user này -> forward ra ngoài, ai bấm nút = referral của họ (join-points). Gắn cho MỌI tier.
-        const msg = buildMessage(ev, { botUser, deleteButton: !!settings.delete_button, refId: tgId });
+        // refId = tg_id user này -> forward ra ngoài, ai bấm link = referral của họ (join-points). Gate cfg.refForwardCta
+        // (mặc định TẮT, đang research) -> null = KHÔNG gắn footer. Bật lại: REF_FWD_CTA=1.
+        const msg = buildMessage(ev, { botUser, deleteButton: !!settings.delete_button, refId: cfg.refForwardCta ? tgId : null });
         if (!msg) continue;
         tg.send(tgId, msg, { priority: e.kind === "deleted" });   // delete chen lên đầu hàng đợi
         sent++;
