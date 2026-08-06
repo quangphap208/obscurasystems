@@ -139,8 +139,11 @@ export class TrackerSync {
             if (!orphanIds.length) continue;
             try {
               const key = await this.keyFor(a.session_token);
-              for (let i = 0; i < orphanIds.length; i += 100) await untrackIds(a.session_token, key, orphanIds.slice(i, i + 100)).catch(() => {});
-              console.log(`[tracker-sync] exclusive: untrack ${orphanIds.length} orphan (shard ${a.id})`);
+              let failed = 0;
+              for (let i = 0; i < orphanIds.length; i += 100)
+                await untrackIds(a.session_token, key, orphanIds.slice(i, i + 100))
+                  .catch((e) => { failed += Math.min(100, orphanIds.length - i); console.warn(`[tracker-sync] exclusive untrack batch lỗi (shard ${a.id}):`, e.message); });
+              console.log(`[tracker-sync] exclusive: untrack ${orphanIds.length} orphan (shard ${a.id})${failed ? ` — ${failed} FAIL (không dính -> vòng sau tìm lại)` : ""}`);
               this.alert(`exclusive: đã untrack ${orphanIds.length} account thừa (shard ${a.id}).`);
             } catch (e) { console.warn("[tracker-sync] exclusive lỗi:", e.message); }
           }
