@@ -54,7 +54,14 @@ const PLAT = {
   truth: { emoji: "🟣", verb: "posted on Truth",     btn: "View on Truth" },
   ig:    { emoji: "📸", verb: "posted on Instagram", btn: "View on Instagram" },
 };
-function buildPlatformMessage(e, { deleteButton = true } = {}) {
+// Nút CTA ref gắn cuối mỗi alert (hàng URL RIÊNG). Khi user forward tin ra group/bạn bè, URL button
+// SỐNG-SÓT (callback "del" bị Telegram strip) -> stranger bấm được. Payload `<refId>_s_fwd` FE parse
+// ĐƯỢC cả referral(=refId, forwarder nhận join-points) LẪN source("fwd", đo kênh forward). refId=null -> ẩn (whitelist).
+function refRow(botUser, refId) {
+  return (botUser && refId) ? [{ text: "🕶 Try Obscura free", url: `https://t.me/${botUser}?start=${refId}_s_fwd` }] : null;
+}
+
+function buildPlatformMessage(e, { deleteButton = true, botUser, refId = null } = {}) {
   const p = PLAT[e.platform]; if (!p) return null;
   const author = e.actor, target = e.target;
   const nPhotos = (e.images || []).length, video = !!e.hasVideo;
@@ -79,17 +86,20 @@ function buildPlatformMessage(e, { deleteButton = true } = {}) {
     : e.postUrl ? { url: e.postUrl, show_above_text: true, prefer_large_media: true }
     : { is_disabled: true };
 
+  const rows = [];
   const row = [];
   if (deleteButton) row.push({ text: "🗑 Delete", callback_data: "del" });
   if (e.postUrl) row.push({ text: p.btn, url: e.postUrl });
-  return { text, link_preview_options: lpo, reply_markup: row.length ? { inline_keyboard: [row] } : undefined };
+  if (row.length) rows.push(row);
+  const rr = refRow(botUser, refId); if (rr) rows.push(rr);
+  return { text, link_preview_options: lpo, reply_markup: rows.length ? { inline_keyboard: rows } : undefined };
 }
 
 // Dựng { text(HTML), link_preview_options, reply_markup } cho Bot API.
 // deleteButton: hiện nút 🗑 Delete (setting delete_button; mặc định bật).
-export function buildMessage(e, { botUser, deleteButton = true } = {}) {
+export function buildMessage(e, { botUser, deleteButton = true, refId = null } = {}) {
   const k = e.kind;
-  if (k === "platform") return buildPlatformMessage(e, { deleteButton });
+  if (k === "platform") return buildPlatformMessage(e, { deleteButton, botUser, refId });
   const meta = ACT[k]; if (!meta) return null;
   const [emoji, verb, sep] = meta;
   const author = e.actor, target = e.target;
@@ -156,6 +166,7 @@ export function buildMessage(e, { botUser, deleteButton = true } = {}) {
     if (e.tweetId && author) row.push({ text: "View Tweet", url: `https://x.com/${author}/status/${e.tweetId}` });
     if (row.length) rows.push(row);
   }
+  const rr = refRow(botUser, refId); if (rr) rows.push(rr);
   return { text, link_preview_options: lpo, reply_markup: rows.length ? { inline_keyboard: rows } : undefined };
 }
 
