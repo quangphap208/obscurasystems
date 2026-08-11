@@ -270,7 +270,7 @@ bot.command("admin", async (ctx) => {
     `<i>vd</i> <code>/unwhitelist 1034016594</code>\n\n` +
     `<b>/admin</b> — menu này.\n\n` +
     `<b>Tiers:</b> Free (${cfg.freeLimit}) · Pro (${cfg.proLimit}) · Whitelist (tuỳ admin)\n` +
-    `💡 Lấy <code>tg_id</code> từ report <b>/support</b> hoặc collection <code>user_stats</code>.`;
+    `💡 Lấy <code>tg_id</code>: user mở <b>/start</b> — dòng <b>ID</b> (tap to copy) — hoặc từ report <b>/support</b> / collection <code>user_stats</code>.`;
   await ctx.reply(t, HTML());
 });
 

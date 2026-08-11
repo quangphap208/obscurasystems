@@ -23,6 +23,7 @@ export function welcomeScreen(user, nWatched, botUser) {
   let text =
     `Welcome to ${BOT_NAME}, <b>${esc(user?.username || "there")}</b> 👋\n\n` +
     `📊 Your plan:\n` +
+    `• ID: <code>${user?.tg_id ?? "?"}</code> <i>(tap to copy)</i>\n` +
     `• Tier: <b>${user?.tier === "Free" ? "Free trial" : esc(user?.tier || "Free")}</b>\n` +
     `• Limit: <b>${user?.account_limit ?? 0}</b> X accounts\n` +
     `• Exp: <b>${fmtExp(user)}</b>\n\n` +
