@@ -335,6 +335,34 @@ bot.command("unwhitelist", async (ctx) => {
   await ctx.reply(`✅ <b>${tg}</b>: <b>${esc(prev)}</b> → <b>Free</b> (limit ${cfg.freeLimit}).`, HTML());
 });
 
+// ---------- /reply (admin trả lời user gửi /support) ----------
+// 2 cách: `/reply <tg_id> <text>` — hoặc swipe-REPLY vào tin report 🆘 trong DM rồi gõ `/reply <text>`
+// (bot tự móc tg_id từ "(<id>)" trong report). Gửi qua bot nên admin không lộ account cá nhân.
+bot.command("reply", async (ctx) => {
+  if (!isAdmin(ctx.from.id)) return;
+  let msg = (ctx.match || "").trim();
+  let target = null;
+  // Ưu tiên tg_id từ tin được swipe-reply (nội dung giữ nguyên vẹn, kể cả khi bắt đầu bằng số);
+  // không có thì mới parse "<tg_id> <text>" từ argument.
+  const rm = (ctx.message?.reply_to_message?.text || "").match(/\((\d{4,})\)/);
+  if (rm) target = Number(rm[1]);
+  else {
+    const m = msg.match(/^(\d{4,})\s+([\s\S]+)$/);
+    if (m) { target = Number(m[1]); msg = m[2].trim(); }
+  }
+  if (!target || !msg) return ctx.reply(
+    "Usage: <b>/reply &lt;tg_id&gt; &lt;message&gt;</b>\n" +
+    "Hoặc <b>swipe-reply</b> vào tin report 🆘 rồi gõ <code>/reply nội dung trả lời</code>.", HTML());
+  try {
+    await ctx.api.sendMessage(target,
+      `💬 <b>Reply from the Obscura team</b>\n\n${esc(msg)}\n\n<i>Need more help? Use /support &lt;message&gt;</i>`, HTML());
+    track(ctx.from.id, "admin", { cmd: "reply", target });
+    await ctx.reply(`✅ Đã gửi cho <code>${target}</code>.`, HTML());
+  } catch (e) {
+    await ctx.reply(`❌ Không gửi được cho <code>${target}</code>: ${esc(e.description || e.message)}\n<i>(thường do user chưa /start bot hoặc đã block)</i>`, HTML());
+  }
+});
+
 // ---------- /admin (chỉ admin thấy — liệt kê lệnh admin + ví dụ) ----------
 bot.command("admin", async (ctx) => {
   if (!isAdmin(ctx.from.id)) return;                 // user khác: im lặng (không lộ)
@@ -350,6 +378,9 @@ bot.command("admin", async (ctx) => {
     `<b>/unwhitelist</b> <code>&lt;tg_id&gt;</code>\n` +
     `Gỡ whitelist/Pro → về Free.\n` +
     `<i>vd</i> <code>/unwhitelist 1034016594</code>\n\n` +
+    `<b>/reply</b> <code>&lt;tg_id&gt; &lt;message&gt;</code>\n` +
+    `Trả lời user qua bot (từ report /support). Tiện nhất: <b>swipe-reply</b> vào tin 🆘 rồi gõ <code>/reply nội dung</code>.\n` +
+    `<i>vd</i> <code>/reply 1034016594 Đã kích hoạt Pro cho bạn nhé!</code>\n\n` +
     `<b>/admin</b> — menu này.\n\n` +
     `<b>Tiers:</b> Free (${cfg.freeLimit}) · Pro (${cfg.proLimit}) · Whitelist (tuỳ admin)\n` +
     `💡 Lấy <code>tg_id</code>: user mở <b>/start</b> — dòng <b>ID</b> (tap to copy) — hoặc từ report <b>/support</b> / collection <code>user_stats</code>.`;
@@ -513,6 +544,7 @@ const adminCommands = [
   { command: "grant", description: "/grant <tg_id> [days] | grant Pro" },
   { command: "whitelist", description: "/whitelist <tg_id> <limit> [days] | custom limit" },
   { command: "unwhitelist", description: "/unwhitelist <tg_id> | back to Free" },
+  { command: "reply", description: "/reply <tg_id> <msg> | reply to a /support report" },
 ];
 for (const id of cfg.adminIds)
   await bot.api.setMyCommands([...userCommands, ...adminCommands], { scope: { type: "chat", chat_id: id } }).catch((e) => console.warn("[admin menu]", id, e.message));
