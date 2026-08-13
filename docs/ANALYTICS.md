@@ -70,7 +70,9 @@ UI. **Không** log mỗi DM gửi ra thành event (fan-out lớn) — đo qua `d
 ### Bảo mật (làm từ đầu, không nợ như bản gốc find_og_token)
 
 - `DASH_PASSWORD` **bắt buộc** từ env — trống thì server từ chối chạy. Sinh: `openssl rand -hex 12`.
-- Session cookie HttpOnly SameSite=Strict 24h (in-memory — restart = logout hết).
+- Session cookie HttpOnly SameSite=Strict, **bền 30 ngày**: lưu Mongo `dash_sessions` (TTL tự xoá)
+  + cache in-memory — restart `kol-dash` không bị logout; sliding (dùng đều = không phải nhập lại).
+  **Đổi `DASH_PASSWORD` = mọi session cũ chết ngay** (session gắn fingerprint password).
 - Rate-limit login **5 lần / 5 phút / IP**. CSRF token cho mọi POST mutation.
 - **Bind `127.0.0.1` mặc định** — truy cập: `ssh -L 5050:127.0.0.1:5050 vps` rồi mở
   `http://localhost:5050`. Muốn public: nginx + TLS + IP allowlist, đừng đổi `DASH_BIND` trần.

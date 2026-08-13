@@ -7,7 +7,7 @@
 //   - bind 127.0.0.1 mặc định — expose qua SSH tunnel hoặc nginx+TLS+allowlist
 //   - mutation ghi audit `admin_actions`
 import { createServer } from "node:http";
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -25,10 +25,15 @@ if (!cfg.dashPassword) { console.error("Thiếu DASH_PASSWORD trong .env — das
 await connect();
 
 const DAY = 86400000;
-const SESS = new Map();       // token -> { exp, csrf }
+// Session BỀN 30 ngày: lưu Mongo (dash_sessions, TTL tự xoá) + cache in-memory -> restart kol-dash
+// KHÔNG bị logout, và sliding (còn <nửa hạn thì tự gia hạn) nên dùng đều là không bao giờ phải nhập lại.
+// PW_TAG: session gắn fingerprint của DASH_PASSWORD — đổi password = mọi session cũ chết ngay.
+const SESSION_DAYS = 30;
+const PW_TAG = createHash("sha256").update(cfg.dashPassword).digest("hex").slice(0, 12);
+const SESS = new Map();       // cache: token -> { exp, csrf, tag } (nguồn thật: dash_sessions)
 const ATTEMPTS = new Map();   // ip -> { n, resetAt }  (rate-limit login)
-// prune session/attempt hết hạn mỗi giờ (in-memory, restart = logout hết — chấp nhận cho tool nội bộ)
-setInterval(() => {
+await col("dash_sessions").createIndex({ exp: 1 }, { expireAfterSeconds: 0 });
+setInterval(() => {           // prune cache/attempt hết hạn mỗi giờ (DB có TTL riêng)
   const t = Date.now();
   for (const [k, s] of SESS) if (s.exp < t) SESS.delete(k);
   for (const [k, a] of ATTEMPTS) if (a.resetAt < t) ATTEMPTS.delete(k);
@@ -41,11 +46,23 @@ const readBody = (req) => new Promise((ok, no) => { let b = ""; req.on("data", (
 const dayStartUTC = () => { const d = new Date(); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()); };
 const dstr = (ms) => new Date(ms).toISOString().slice(0, 10);
 
-function session(req) {
+const cookieStr = (t, maxAge = SESSION_DAYS * 86400) => `dash=${t}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}`;
+
+// Read-through: cache -> Mongo. Sliding: còn < nửa hạn -> gia hạn DB + refresh cookie.
+async function session(req, res) {
   const t = cookies(req).dash;
-  const s = t && SESS.get(t);
-  if (!s) return null;
-  if (s.exp < Date.now()) { SESS.delete(t); return null; }
+  if (!t) return null;
+  let s = SESS.get(t);
+  if (!s) {
+    const d = await col("dash_sessions").findOne({ _id: t });
+    if (d) { s = { exp: d.exp.getTime(), csrf: d.csrf, tag: d.tag }; SESS.set(t, s); }
+  }
+  if (!s || s.exp < Date.now() || s.tag !== PW_TAG) { SESS.delete(t); return null; }
+  if (s.exp - Date.now() < SESSION_DAYS * DAY / 2) {
+    s.exp = Date.now() + SESSION_DAYS * DAY;
+    col("dash_sessions").updateOne({ _id: t }, { $set: { exp: new Date(s.exp) } }).catch(() => {});
+    res.setHeader("set-cookie", cookieStr(t));
+  }
   return s;
 }
 
@@ -236,8 +253,10 @@ const server = createServer(async (req, res) => {
       if (body.password !== cfg.dashPassword) { a.n++; ATTEMPTS.set(ip, a); return json(res, 401, { error: "Sai mật khẩu" }); }
       ATTEMPTS.delete(ip);
       const token = randomBytes(24).toString("hex"), csrf = randomBytes(16).toString("hex");
-      SESS.set(token, { exp: Date.now() + DAY, csrf });
-      res.setHeader("set-cookie", `dash=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=86400`);
+      const exp = Date.now() + SESSION_DAYS * DAY;
+      SESS.set(token, { exp, csrf, tag: PW_TAG });
+      await col("dash_sessions").insertOne({ _id: token, csrf, tag: PW_TAG, exp: new Date(exp), at: now() });
+      res.setHeader("set-cookie", cookieStr(token));
       return json(res, 200, { ok: true, csrf });
     }
     // trang chính — HTML tự fetch /api/session để biết đã login chưa
@@ -247,11 +266,15 @@ const server = createServer(async (req, res) => {
       return res.end(page);
     }
 
-    const sess = session(req);
+    const sess = await session(req, res);
     if (url.pathname.startsWith("/api/")) {
       if (url.pathname === "/api/session") return sess ? json(res, 200, { ok: true, csrf: sess.csrf }) : json(res, 401, { error: "unauth" });
       if (!sess) return json(res, 401, { error: "unauth" });
-      if (req.method === "POST" && url.pathname === "/api/logout") { SESS.delete(cookies(req).dash); res.setHeader("set-cookie", "dash=; Path=/; Max-Age=0"); return json(res, 200, { ok: true }); }
+      if (req.method === "POST" && url.pathname === "/api/logout") {
+        const t = cookies(req).dash;
+        SESS.delete(t); await col("dash_sessions").deleteOne({ _id: t }).catch(() => {});
+        res.setHeader("set-cookie", "dash=; Path=/; Max-Age=0"); return json(res, 200, { ok: true });
+      }
       if (req.method === "POST" && (url.pathname === "/api/pro-action" || url.pathname === "/api/session-action")) {
         if (req.headers["x-csrf"] !== sess.csrf) return json(res, 403, { error: "CSRF" });   // cookie-only request (cross-site) không có token
         const body = JSON.parse(await readBody(req) || "{}");
