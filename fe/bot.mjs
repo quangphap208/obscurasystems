@@ -4,6 +4,7 @@ import { Bot, GrammyError } from "grammy";
 import { cfg, assertFE, isAdmin } from "../shared/config.mjs";
 import { connect, close } from "../shared/mongo.mjs";
 import * as repo from "../shared/repo.mjs";
+import { track, touch } from "../shared/track.mjs";
 import { paymentHook } from "../shared/slack.mjs";
 import { byKey, GATE_TEXT } from "../shared/settings.mjs";
 import { resolveHandle, parseHandle } from "./xsearch.mjs";
@@ -31,6 +32,9 @@ await connect();
 
 const bot = new Bot(cfg.botToken);
 let BOT_USER = null;
+
+// Analytics (shared/track.mjs): bump last_active_at cho MỌI tương tác; event có nghĩa thì handler tự track().
+bot.use((ctx, next) => { if (ctx.from) touch(ctx.from.id); return next(); });
 
 const NOPREVIEW = { link_preview_options: { is_disabled: true } };
 const HTML = (extra = {}) => ({ parse_mode: "HTML", ...NOPREVIEW, ...extra });
@@ -76,6 +80,7 @@ bot.command("start", async (ctx) => {
     const pts = await repo.recordReferralOnStart(referredBy, ctx.from.id);   // idempotent + chỉ nguồn first-touch
     if (pts > 0) notifyReferrer(referredBy, pts, "join");
   }
+  track(ctx.from.id, "start", { ...(source && { source }), ...(referredBy && { ref: referredBy }), ...(qa && { qa }) });
   if (qa) return qaReply(ctx, qa);
   await welcome(ctx);
 });
@@ -93,13 +98,14 @@ bot.command("add", async (ctx) => {
   const handle = parseHandle(ctx.match);
   if (!handle) return ctx.reply("Usage: <b>/add &lt;username or link&gt;</b>\ne.g. <code>/add elonmusk</code> or <code>/add https://x.com/elonmusk</code>", HTML());
   const u = await repo.ensureUser(ctx.from.id, ctx.from.username);
-  if (!repo.hasAccess(u)) return ctx.reply(`⌛ Your ${u.tier === "Free" ? "free trial" : "plan"} has ended.${cfg.subsEnabled ? "\nUse <b>/subscribe</b> to keep tracking accounts." : ""}`, HTML());
+  if (!repo.hasAccess(u)) { track(ctx.from.id, "add", { handle, result: "no_access" }); return ctx.reply(`⌛ Your ${u.tier === "Free" ? "free trial" : "plan"} has ended.${cfg.subsEnabled ? "\nUse <b>/subscribe</b> to keep tracking accounts." : ""}`, HTML()); }
   if (await repo.getWatch(ctx.from.id, handle)) return ctx.reply(`Already watching <b>@${esc(handle)}</b>.`, HTML());
   const n = await repo.countWatches(ctx.from.id);
-  if (n >= (u.account_limit ?? 0)) return ctx.reply(`⚠️ You've reached the <b>${u.account_limit}</b>-account limit of your <b>${esc(u.tier)}</b> plan.${cfg.subsEnabled ? `\nUse <b>/subscribe</b> to add a <b>+${cfg.packSize} pack</b> or upgrade to <b>Whale</b>.` : ""}`, HTML());
+  if (n >= (u.account_limit ?? 0)) { track(ctx.from.id, "add", { handle, result: "limit" }); return ctx.reply(`⚠️ You've reached the <b>${u.account_limit}</b>-account limit of your <b>${esc(u.tier)}</b> plan.${cfg.subsEnabled ? `\nUse <b>/subscribe</b> to add a <b>+${cfg.packSize} pack</b> or upgrade to <b>Whale</b>.` : ""}`, HTML()); }
   const r = await resolveHandle(handle);
-  if (r.found === false) return ctx.reply(`❌ <b>@${esc(handle)}</b> not found on X.`, HTML());
+  if (r.found === false) { track(ctx.from.id, "add", { handle, result: "not_found" }); return ctx.reply(`❌ <b>@${esc(handle)}</b> not found on X.`, HTML()); }
   await repo.addWatch(ctx.from.id, r.found ? r.handle : handle, r.xid || null);
+  track(ctx.from.id, "add", { handle: r.found ? r.handle : handle, result: "ok" });
   await ctx.reply(`✅ Added <b>@${esc(r.found ? r.handle : handle)}</b>. Notifications will arrive shortly.\nCustomize it: 👀 X accounts.`, HTML());
 });
 
@@ -107,6 +113,7 @@ bot.command("remove", async (ctx) => {
   const handle = parseHandle(ctx.match);
   if (!handle) return ctx.reply("Usage: <b>/remove &lt;username or link&gt;</b>", HTML());
   const ok = await repo.removeWatch(ctx.from.id, handle);
+  track(ctx.from.id, "remove", { handle, ok: !!ok });
   await ctx.reply(ok ? `✅ Unfollowed <b>@${esc(handle)}</b>.` : `<b>@${esc(handle)}</b> is not in your list.`, HTML());
 });
 
@@ -153,11 +160,13 @@ bot.command("support", async (ctx) => {
   if (!delivered)
     return ctx.reply(`❌ Couldn't reach support right now.${cfg.supportContact ? ` Please contact <b>${esc(cfg.supportContact)}</b>.` : " Please try again later."}`, HTML());
   supportCooldown.set(ctx.from.id, now);
+  track(ctx.from.id, "support", { len: msg.length });
   await ctx.reply(`✅ <b>Report sent!</b> The team will get back to you as soon as possible.`, HTML());
 });
 
 // ---------- /subscribe + thanh toán Telegram Stars ----------
 bot.command("subscribe", async (ctx) => {
+  track(ctx.from.id, "subscribe_view", { enabled: cfg.subsEnabled ? 1 : 0 });
   if (!cfg.subsEnabled) return ctx.reply(SUBS_OFF_MSG, HTML());
   const u = await repo.ensureUser(ctx.from.id, ctx.from.username);
   await show(ctx, subscribeScreen(u, cfg));
@@ -176,12 +185,14 @@ async function sendPlanInvoice(ctx, kind) {
     return void ctx.reply("➕ Packs add accounts to a paid plan. Get <b>Pro</b> or <b>Whale</b> first.", HTML());
   const other = cfg.starsProviderToken ? { provider_token: cfg.starsProviderToken } : {};
   await ctx.replyWithInvoice(p.title, p.desc(), kind, "XTR", [{ label: p.label(), amount: p.stars() }], other);
+  track(ctx.from.id, "invoice_stars", { kind });
 }
 bot.on("pre_checkout_query", (ctx) => ctx.answerPreCheckoutQuery(true).catch(() => {}));
 bot.on("message:successful_payment", async (ctx) => {
   const pay = ctx.message.successful_payment;   // XTR: currency "XTR", total_amount=Stars, invoice_payload=kind, telegram_payment_charge_id
   const kind = pay.invoice_payload || "pro";
   const res = await repo.applyPurchase(ctx.from.id, kind);
+  track(ctx.from.id, "paid_stars", { kind, stars: pay.total_amount });
   paymentHook(`✅ Stars PAID · ${ctx.from.username ? "@" + ctx.from.username : ""} (${ctx.from.id}) · ${kind} · ${pay.total_amount}⭐ · limit ${res?.account_limit ?? "?"}`);
   await repo.markReferralSubscribed(ctx.from.id);
   const ref = await repo.awardRefConvert(ctx.from.id, { amount: pay.total_amount, currency: pay.currency, chargeId: pay.telegram_payment_charge_id });
@@ -199,6 +210,7 @@ bot.command("pay", async (ctx) => {
   if (!sig) return ctx.reply("Usage: <b>/pay &lt;transaction signature&gt;</b>\nUse this only if an auto-credit didn't arrive.", HTML());
   await ctx.reply("🔎 Checking your transaction…", HTML());
   const r = await verifyManual(bot, sig);
+  track(ctx.from.id, "pay_manual", { ok: r.ok ? 1 : 0 });
   if (r.ok) return ctx.reply("✅ Payment found and credited. Thanks!", HTML());
   if (r.error === "no_match") paymentHook(`⚠️ /pay NO MATCH · ${ctx.from.username ? "@" + ctx.from.username : ""} (${ctx.from.id}) · sig ${sig.slice(0, 12)}… — kiểm tra thủ công`);
   const m = r.error === "no_match" ? "No matching pending invoice (wrong amount/coin, or already credited)."
@@ -222,6 +234,7 @@ bot.command("grant", async (ctx) => {
   const tg = Number(target); if (!tg) return ctx.reply("Usage: /grant <tg_id> [days]");
   await repo.ensureUser(tg);
   await repo.setUserPlan(tg, { tier: "Pro", accountLimit: cfg.proLimit, expiresAt: Date.now() + (Number(days) || cfg.proDays) * 86400000 });
+  track(ctx.from.id, "admin", { cmd: "grant", target: tg, days: Number(days) || cfg.proDays });
   await ctx.reply(`✅ Granted Pro to ${tg} (${Number(days) || cfg.proDays} days).`);
 });
 
@@ -238,6 +251,7 @@ bot.command("whitelist", async (ctx) => {
   }
   const expiresAt = days ? Date.now() + Number(days) * 86400000 : null;
   await repo.setUserPlan(tg, { tier: "Whitelist", accountLimit: limit, expiresAt });
+  track(ctx.from.id, "admin", { cmd: "whitelist", target: tg, limit, ...(days && { days: Number(days) }) });
   await ctx.reply(`✅ Whitelisted <b>${tg}</b>: limit <b>${limit}</b>${days ? `, ${Number(days)} days` : " (no expiry)"}.`, HTML());
 });
 
@@ -250,6 +264,7 @@ bot.command("unwhitelist", async (ctx) => {
   if (!u) return ctx.reply(`⚠️ User <code>${tg}</code> chưa tồn tại.`, HTML());
   const prev = u.tier || "Free";
   await repo.setUserPlan(tg, { tier: "Free", accountLimit: cfg.freeLimit, expiresAt: null });
+  track(ctx.from.id, "admin", { cmd: "unwhitelist", target: tg });
   await ctx.reply(`✅ <b>${tg}</b>: <b>${esc(prev)}</b> → <b>Free</b> (limit ${cfg.freeLimit}).`, HTML());
 });
 
@@ -282,16 +297,18 @@ bot.on("callback_query:data", async (ctx) => {
     if (data === "none") return ctx.answerCallbackQuery();
     if (data === "close") { await ctx.deleteMessage().catch(() => {}); return ctx.answerCallbackQuery(); }
     if (data === "del") { await ctx.deleteMessage().catch(() => {}); return ctx.answerCallbackQuery("Deleted"); }  // xoá tin noti
-    if (data === "home") { await welcome(ctx, true); return ctx.answerCallbackQuery(); }
-    if (data === "viewAccounts") { await show(ctx, accountsScreen(await repo.listWatches(uid)), true); return ctx.answerCallbackQuery("Viewing accounts"); }
-    if (data === "referrals") { await show(ctx, referralScreen(BOT_USER, uid, await repo.referralStats(uid)), true); return ctx.answerCallbackQuery("Viewing Referrals..."); }
-    if (data === "globalsettings") { await show(ctx, globalSettingsScreen(await repo.getGlobalSettings(uid)), true); return ctx.answerCallbackQuery("Viewing global settings"); }
+    if (data === "home") { track(uid, "nav", { to: "home" }); await welcome(ctx, true); return ctx.answerCallbackQuery(); }
+    if (data === "viewAccounts") { track(uid, "nav", { to: "accounts" }); await show(ctx, accountsScreen(await repo.listWatches(uid)), true); return ctx.answerCallbackQuery("Viewing accounts"); }
+    if (data === "referrals") { track(uid, "nav", { to: "referrals" }); await show(ctx, referralScreen(BOT_USER, uid, await repo.referralStats(uid)), true); return ctx.answerCallbackQuery("Viewing Referrals..."); }
+    if (data === "globalsettings") { track(uid, "nav", { to: "settings" }); await show(ctx, globalSettingsScreen(await repo.getGlobalSettings(uid)), true); return ctx.answerCallbackQuery("Viewing global settings"); }
     if (data === "subscribe") {
+      track(uid, "subscribe_view", { enabled: cfg.subsEnabled ? 1 : 0 });
       if (!cfg.subsEnabled) { await ctx.reply(SUBS_OFF_MSG, HTML()); return ctx.answerCallbackQuery(); }
       await show(ctx, subscribeScreen(await repo.getUser(uid), cfg), true); return ctx.answerCallbackQuery();
     }
     if (data.startsWith("plan:")) {
       const kind = data.slice(5);
+      track(uid, "plan_view", { kind });
       if (cryptoEnabled()) { await show(ctx, paymentMethodScreen(kind, cfg), true); return ctx.answerCallbackQuery(); }
       await sendPlanInvoice(ctx, kind); return ctx.answerCallbackQuery();          // crypto off -> Stars thẳng
     }
@@ -306,6 +323,7 @@ bot.on("callback_query:data", async (ctx) => {
       const [, kind, coin] = data.split(":");
       const r = await makeInvoice(uid, kind, coin);
       if (!r.ok) return ctx.answerCallbackQuery(cryptoErr(r.error));
+      track(uid, "invoice_crypto", { kind, coin: r.coin });
       await show(ctx, cryptoInvoiceScreen(kind, r.coin, r.amount, r.address, cfg.cryptoWindowMin), true);
       return ctx.answerCallbackQuery();
     }
@@ -318,6 +336,7 @@ bot.on("callback_query:data", async (ctx) => {
     if (data.startsWith("rm:")) {
       const h = data.slice(3);
       await repo.removeWatch(uid, h);
+      track(uid, "remove", { handle: h, ok: 1 });
       await show(ctx, accountsScreen(await repo.listWatches(uid)), true);
       return ctx.answerCallbackQuery(`Removed @${h}`);
     }
@@ -333,6 +352,7 @@ bot.on("callback_query:data", async (ctx) => {
       if (PLATFORMS.has(p)) {
         const cur = (await repo.getGlobalSettings(uid))[p];
         await repo.setGlobalSetting(uid, p, cur ? 0 : 1);
+        track(uid, "platform", { p, act: cur ? "off" : "on" });
         await showPlatform(ctx, p, true);
         return ctx.answerCallbackQuery(cur ? "Disabled" : "Enabled");
       }
@@ -351,6 +371,7 @@ bot.on("callback_query:data", async (ctx) => {
             else await repo.removePlatformWatch(uid, h, p);
           } catch (e) { console.warn("[plat-all]", p, h, e.message); }   // 1 handle lỗi không chặn cả list
         }
+        track(uid, "platform", { p, act: selectAll ? "all" : "none", n: list.length });
         await showPlatform(ctx, p, true);
         return ctx.answerCallbackQuery(selectAll ? `Followed all (${list.length})` : "Cleared all");
       }
@@ -361,9 +382,11 @@ bot.on("callback_query:data", async (ctx) => {
       const p = rest.slice(0, i), h = rest.slice(i + 1);
       if (PLATFORMS.has(p) && h) {
         const set = await repo.platformWatchSet(uid, p);
-        if (set.has(h.toLowerCase())) await repo.removePlatformWatch(uid, h, p);   // gỡ luôn cho phép
+        const had = set.has(h.toLowerCase());
+        if (had) await repo.removePlatformWatch(uid, h, p);   // gỡ luôn cho phép
         else if (!repo.hasAccess(await repo.getUser(uid))) return ctx.answerCallbackQuery("Trial ended — /subscribe to add");
         else await repo.addPlatformWatch(uid, h, p);
+        track(uid, "platform", { p, act: had ? "unfollow" : "follow", h });
         await showPlatform(ctx, p, true);
       }
       return ctx.answerCallbackQuery();
@@ -386,10 +409,12 @@ async function toggle(ctx, s, scope) {
   if (scope.type === "g") {
     const cur = (await repo.getGlobalSettings(uid))[s.col];
     await repo.setGlobalSetting(uid, s.col, cur ? 0 : 1);
+    track(uid, "toggle", { key: s.key, scope: "g", on: cur ? 0 : 1 });
     await show(ctx, globalSettingsScreen(await repo.getGlobalSettings(uid)), true);
   } else {
     const cur = (await repo.effectiveSettings(uid, scope.handle))[s.col];
     await repo.setWatchSetting(uid, scope.handle, s.col, cur ? 0 : 1);
+    track(uid, "toggle", { key: s.key, scope: "w", h: scope.handle, on: cur ? 0 : 1 });
     await show(ctx, accountSettingsScreen(scope.handle, await repo.effectiveSettings(uid, scope.handle)), true);
   }
   return ctx.answerCallbackQuery();

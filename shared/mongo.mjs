@@ -45,4 +45,8 @@ async function ensureIndexes(db) {
   await db.collection("crypto_invoices").createIndex({ coin: 1, status: 1 });
   await db.collection("crypto_invoices").createIndex({ status: 1, dead_at: 1 });
   await db.collection("crypto_seen").createIndex({ at: 1 }, { expireAfterSeconds: 3 * 24 * 3600 });   // sig đã dò (perf)
+  // analytics (shared/track.mjs): event log TTL 90 ngày + query theo user/action
+  await db.collection("user_actions").createIndex({ at: 1 }, { expireAfterSeconds: 90 * 24 * 3600 });
+  await db.collection("user_actions").createIndex({ tg_id: 1, at: -1 });
+  await db.collection("user_actions").createIndex({ action: 1, at: -1 });
 }
