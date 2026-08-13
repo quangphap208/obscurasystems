@@ -30,5 +30,17 @@ module.exports = {
       restart_delay: 5000,
       env: { NODE_ENV: "production" },
     },
+    {
+      // Admin dashboard (analytics + quản PRO). Cần DASH_PASSWORD trong .env; bind 127.0.0.1
+      // mặc định — truy cập qua SSH tunnel: ssh -L 5050:127.0.0.1:5050 vps
+      name: "kol-dash",
+      script: "dashboard/server.mjs",
+      cwd: __dirname,
+      autorestart: true,
+      max_restarts: 20,
+      restart_delay: 3000,
+      max_memory_restart: "200M",
+      env: { NODE_ENV: "production" },
+    },
   ],
 };

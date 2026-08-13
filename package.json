@@ -12,7 +12,8 @@
     "seed": "node scripts/seed.mjs",
     "inject": "node scripts/inject_event.mjs",
     "clone": "node scripts/clone_db.mjs",
-    "verify": "node scripts/verify_format.mjs"
+    "verify": "node scripts/verify_format.mjs",
+    "dash": "node dashboard/server.mjs"
   },
   "dependencies": {
     "grammy": "^1.30.0",

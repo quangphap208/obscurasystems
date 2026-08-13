@@ -99,6 +99,11 @@ export const cfg = {
   paymentWebhook: process.env.PAYMENT_WEBHOOK || "",
   // Feed watchdog: báo Slack khi feed IM LẶNG > N phút (WS treo/rớt ngầm, không expired/FATAL). 0 = tắt.
   feedSilenceMin: Number(process.env.FEED_SILENCE_MIN || 10),
+  // --- Admin dashboard (dashboard/server.mjs, pm2 kol-dash) — đọc analytics + quản PRO qua browser. ---
+  // Mặc định bind 127.0.0.1: expose qua SSH tunnel / nginx+TLS, KHÔNG mở port trần. Trống password = không chạy.
+  dashPort: Number(process.env.DASH_PORT || 5050),
+  dashBind: process.env.DASH_BIND || "127.0.0.1",
+  dashPassword: process.env.DASH_PASSWORD || "",
 };
 
 export function assertFE() {

@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Obscura — Admin Dashboard</title>
+<style>
+  /* Dark cố định (tool nội bộ). Palette: dataviz reference (dark steps). */
+  :root {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --border: rgba(255,255,255,.10);
+    --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --baseline: #383835;
+    --s1: #3987e5;              /* series (sequential blue, dark step) */
+    --good: #0ca30c; --warn: #fab219; --crit: #d03b3b;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--page); color: var(--ink); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; padding: 20px; }
+  h1 { font-size: 17px; } h2 { font-size: 13px; color: var(--ink-2); font-weight: 600; margin-bottom: 10px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  header .sp { flex: 1; } header .note { color: var(--muted); font-size: 12px; }
+  button { background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px; cursor: pointer; font: inherit; font-size: 13px; }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--s1); border-color: var(--s1); }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); margin-bottom: 16px; }
+  .cols { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); align-items: start; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+  /* stat tile: hero number + nhãn phụ */
+  .tile .v { font-size: 26px; font-weight: 700; } .tile .l { color: var(--muted); font-size: 12px; }
+  .tile .sub { color: var(--ink-2); font-size: 12px; }
+  /* bar chart: cột mảnh, khe 2px, data-end bo 4px neo baseline, grid lặng */
+  .chart { display: flex; align-items: flex-end; gap: 2px; height: 120px; border-bottom: 1px solid var(--baseline); position: relative; }
+  .chart .bar { flex: 1; min-width: 3px; background: var(--s1); border-radius: 4px 4px 0 0; position: relative; }
+  .chart .bar:hover { filter: brightness(1.25); }
+  .xlab { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; margin-top: 4px; }
+  .ymax { position: absolute; top: -2px; right: 0; color: var(--muted); font-size: 11px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px; padding: 4px 8px 4px 0; border-bottom: 1px solid var(--grid); }
+  td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .inbar { display: inline-block; height: 8px; background: var(--s1); border-radius: 0 4px 4px 0; vertical-align: middle; margin-right: 6px; }
+  .ok { color: var(--good); } .bad { color: var(--crit); } .dim { color: var(--muted); }
+  .pill { border: 1px solid var(--border); border-radius: 20px; padding: 0 8px; font-size: 12px; color: var(--ink-2); }
+  input { background: var(--page); color: var(--ink); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font: inherit; width: 110px; }
+  #login { position: fixed; inset: 0; background: var(--page); display: none; place-items: center; z-index: 10; }
+  #login form { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; display: grid; gap: 10px; width: 280px; }
+  #tip { position: fixed; background: var(--page); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 12px; pointer-events: none; display: none; z-index: 20; white-space: nowrap; }
+  #msg { font-size: 12px; margin-top: 6px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+</style>
+</head>
+<body>
+<div id="login"><form onsubmit="return doLogin(event)">
+  <b>🕶 Obscura Dashboard</b>
+  <input type="password" id="pw" placeholder="Mật khẩu" style="width:100%" autofocus>
+  <button class="primary">Đăng nhập</button>
+  <div id="loginErr" class="bad"></div>
+</form></div>
+<div id="tip"></div>
+
+<header>
+  <h1>🕶 Obscura — Admin</h1><span class="note">giờ UTC · làm mới 60s</span>
+  <div class="sp"></div>
+  <button onclick="loadAll()">↻ Refresh</button>
+  <button onclick="logout()">Logout</button>
+</header>
+
+<div class="grid" id="tiles"></div>
+
+<div class="cols">
+  <div class="card"><h2>Hoạt động (event/ngày · 14d)</h2><div id="cActivity"></div></div>
+  <div class="card"><h2>Noti đã gửi (DM/ngày · 14d)</h2><div id="cDeliv"></div></div>
+  <div class="card"><h2>Theo giờ (24h qua)</h2><div id="cHourly"></div></div>
+</div>
+
+<div class="cols">
+  <div>
+    <div class="card"><h2>Top handle được theo dõi</h2><div id="tHandles"></div></div>
+    <div class="card"><h2>Nguồn user & referral</h2><div id="tSources"></div></div>
+    <div class="card"><h2>Loại action (7d)</h2><div id="tActions"></div></div>
+  </div>
+  <div>
+    <div class="card"><h2>Quản lý PRO / Whitelist</h2>
+      <div class="row">
+        <input id="pTg" placeholder="tg_id"><input id="pLimit" placeholder="limit"><input id="pDays" placeholder="days (trống=∞)">
+        <button onclick="pro('grant')">Grant Pro</button>
+        <button onclick="pro('whitelist')">Whitelist</button>
+        <button onclick="pro('free')">Về Free</button>
+      </div>
+      <div id="msg"></div>
+      <div id="tPro" style="margin-top:10px"></div>
+    </div>
+    <div class="card"><h2>Thanh toán</h2><div id="tPay"></div></div>
+    <div class="card"><h2>Event gần nhất</h2><div id="tRecent"></div></div>
+  </div>
+</div>
+
+<script>
+let CSRF = null;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+const fmt = (n) => Number(n || 0).toLocaleString("en-US");
+const ago = (ms) => { if (!ms) return "—"; const m = (Date.now() - ms) / 60000; return m < 60 ? `${m | 0}m` : m < 1440 ? `${(m / 60) | 0}h` : `${(m / 1440) | 0}d`; };
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (r.status === 401) { $("login").style.display = "grid"; throw new Error("unauth"); }
+  return r.json();
+}
+async function doLogin(e) {
+  e.preventDefault();
+  const r = await fetch("/api/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: $("pw").value }) });
+  const d = await r.json();
+  if (!d.ok) { $("loginErr").textContent = d.error || "Lỗi"; return false; }
+  CSRF = d.csrf; $("login").style.display = "none"; loadAll(); return false;
+}
+async function logout() { await fetch("/api/logout", { method: "POST" }); location.reload(); }
+
+// tooltip dùng chung cho bar
+const tip = $("tip");
+function hover(el, text) {
+  el.addEventListener("mousemove", (e) => { tip.style.display = "block"; tip.textContent = text; tip.style.left = e.clientX + 12 + "px"; tip.style.top = e.clientY - 28 + "px"; });
+  el.addEventListener("mouseleave", () => tip.style.display = "none");
+}
+// bar chart 1 series: values = [{k, v, tip}]
+function bars(elId, values) {
+  const root = $(elId); root.innerHTML = "";
+  if (!values.length) { root.innerHTML = '<span class="dim">chưa có dữ liệu</span>'; return; }
+  const max = Math.max(...values.map((d) => d.v), 1);
+  const c = document.createElement("div"); c.className = "chart";
+  const ym = document.createElement("span"); ym.className = "ymax"; ym.textContent = fmt(max); c.appendChild(ym);
+  for (const d of values) {
+    const b = document.createElement("div"); b.className = "bar";
+    b.style.height = Math.max(d.v / max * 100, d.v ? 3 : 0) + "%";
+    if (!d.v) b.style.background = "var(--grid)";
+    hover(b, d.tip); c.appendChild(b);
+  }
+  const x = document.createElement("div"); x.className = "xlab";
+  x.innerHTML = `<span>${esc(values[0].k)}</span><span>${esc(values.at(-1).k)}</span>`;
+  root.appendChild(c); root.appendChild(x);
+}
+const table = (elId, head, rowsHtml) => { $(elId).innerHTML = `<table><tr>${head.map((h) => `<th class="${h.startsWith("#") ? "num" : ""}">${h.replace("#", "")}</th>`).join("")}</tr>${rowsHtml}</table>`; };
+
+// lấp ngày thiếu = 0 cho trục thời gian liên tục
+function fillDays(rows, days, get) {
+  const map = Object.fromEntries(rows.map((r) => [r._id, r]));
+  const out = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const k = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+    out.push({ k: k.slice(5), full: k, r: map[k] || null, v: map[k] ? get(map[k]) : 0 });
+  }
+  return out;
+}
+
+async function loadAll() {
+  const [ov, act, del, hr, tops, src, acts, pay, pro, rec] = await Promise.all([
+    api("/api/overview"), api("/api/activity?days=14"), api("/api/deliveries?days=14"), api("/api/hourly"),
+    api("/api/top-handles"), api("/api/sources"), api("/api/actions?days=7"), api("/api/payments"), api("/api/pro-users"), api("/api/recent"),
+  ]);
+  // tiles
+  const tiles = [
+    ["Users", fmt(ov.total), Object.entries(ov.byTier).map(([t, n]) => `${t} ${n}`).join(" · ")],
+    ["Active hôm nay", fmt(ov.activeToday), `${fmt(ov.newToday)} user mới`],
+    ["Watches", fmt(ov.watches), `${fmt(ov.handles)} handle`],
+    ["Event hôm nay", fmt(ov.eventsToday), ""],
+    ["Noti hôm nay", fmt(ov.notisToday), "DM đã gửi"],
+    ["Paid active", fmt(ov.paidActive), ""],
+    ["Doanh thu", `$${fmt(ov.revenue.usd)}`, `${fmt(ov.revenue.stars)}⭐ · ${fmt(ov.revenue.count)} giao dịch`],
+  ];
+  $("tiles").innerHTML = tiles.map(([l, v, s]) => `<div class="card tile"><div class="l">${l}</div><div class="v">${v}</div><div class="sub">${s}</div></div>`).join("");
+
+  bars("cActivity", fillDays(act.rows, act.days, (r) => r.n).map((d) => ({ k: d.k, v: d.v, tip: `${d.full}: ${fmt(d.v)} event · ${fmt(d.r?.uniq || 0)} user` })));
+  bars("cDeliv", fillDays(del.rows, del.days, (r) => r.n).map((d) => ({ k: d.k, v: d.v, tip: `${d.full}: ${fmt(d.v)} DM` })));
+  const hmap = Object.fromEntries(hr.rows.map((r) => [r._id, r.n]));
+  bars("cHourly", Array.from({ length: 24 }, (_, h) => ({ k: `${h}h`, v: hmap[h] || 0, tip: `${h}:00 UTC — ${fmt(hmap[h] || 0)} event` })));
+
+  const maxH = Math.max(...tops.rows.map((r) => r.n), 1);
+  table("tHandles", ["Handle", "Nền tảng", "#Watchers"], tops.rows.map((r) =>
+    `<tr><td>@${esc(r.handle)}</td><td class="dim">${esc(r.platform || "x")}</td><td class="num"><span class="inbar" style="width:${r.n / maxH * 60}px"></span>${r.n}</td></tr>`).join(""));
+
+  table("tSources", ["Nguồn", "#User"], src.bySource.map((s) =>
+    `<tr><td>${esc(s._id || "(organic)")}</td><td class="num">${s.n}</td></tr>`).join("") +
+    `<tr><td class="dim">referred / referral rows</td><td class="num">${src.referred} / ${src.refRows}</td></tr>` +
+    (src.topRef.length ? `<tr><td colspan="2" class="dim">Top ref: ${src.topRef.map((u) => `${esc(u.username || u._id)} (${u.points})`).join(" · ")}</td></tr>` : ""));
+
+  table("tActions", ["Action", "#Lần", "#User"], acts.rows.map((r) =>
+    `<tr><td>${esc(r._id)}</td><td class="num">${fmt(r.n)}</td><td class="num">${fmt(r.uniq)}</td></tr>`).join(""));
+
+  table("tPay", ["Lúc", "User", "Gói", "Số tiền"], pay.rows.map((p) =>
+    `<tr><td class="dim">${new Date(p.at).toISOString().slice(0, 16).replace("T", " ")}</td><td>${p.tg_id}</td><td>${esc(p.kind)}</td><td class="num">${p.method === "stars" ? fmt(p.amount) + "⭐" : esc(p.amount) + " " + esc(p.currency) + (p.usd ? ` ($${p.usd})` : "")}</td></tr>`).join("") || '<tr><td class="dim">chưa có</td></tr>');
+
+  table("tPro", ["User", "Tier", "#Limit", "#Watch", "Hạn", "Active", ""], pro.rows.map((u) =>
+    `<tr><td>${esc(u.username || "")} <span class="dim">${u._id}</span></td><td><span class="pill">${esc(u.tier)}</span></td>` +
+    `<td class="num">${u.account_limit}</td><td class="num">${u.watches}</td>` +
+    `<td>${u.expires_at ? (u.expired ? '<span class="bad">EXPIRED</span>' : `<span class="ok">${u.days_left}d</span>`) : "∞"}</td>` +
+    `<td class="dim">${ago(u.last_active_at)}</td>` +
+    `<td><button onclick="$('pTg').value='${u._id}'">chọn</button></td></tr>`).join(""));
+
+  table("tRecent", ["Lúc", "User", "Action", "Meta"], rec.rows.map((r) =>
+    `<tr><td class="dim">${new Date(r.at).toISOString().slice(5, 16).replace("T", " ")}</td><td>${r.tg_id}</td><td>${esc(r.action)}</td><td class="dim">${esc(JSON.stringify(r.meta || "")).slice(0, 60)}</td></tr>`).join(""));
+}
+
+async function pro(action) {
+  const d = await api("/api/pro-action", { method: "POST", headers: { "content-type": "application/json", "x-csrf": CSRF },
+    body: JSON.stringify({ action, tg_id: $("pTg").value, days: $("pDays").value, limit: $("pLimit").value }) });
+  $("msg").innerHTML = d.ok ? `<span class="ok">✅ ${esc(d.result)}</span>` : `<span class="bad">❌ ${esc(d.error)}</span>`;
+  if (d.ok) loadAll();
+}
+
+// boot: có session (cookie còn hạn) thì vào thẳng, không thì hiện login
+api("/api/session").then((d) => { CSRF = d.csrf; loadAll(); }).catch(() => {});
+setInterval(() => { if (CSRF) loadAll().catch(() => {}); }, 60000);
+</script>
+</body>
+</html>
