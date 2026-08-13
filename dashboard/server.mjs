@@ -22,6 +22,12 @@ await connect();
 const DAY = 86400000;
 const SESS = new Map();       // token -> { exp, csrf }
 const ATTEMPTS = new Map();   // ip -> { n, resetAt }  (rate-limit login)
+// prune session/attempt hết hạn mỗi giờ (in-memory, restart = logout hết — chấp nhận cho tool nội bộ)
+setInterval(() => {
+  const t = Date.now();
+  for (const [k, s] of SESS) if (s.exp < t) SESS.delete(k);
+  for (const [k, a] of ATTEMPTS) if (a.resetAt < t) ATTEMPTS.delete(k);
+}, 3600000).unref();
 
 // ---------- helpers ----------
 const json = (res, code, data) => { const b = JSON.stringify(data); res.writeHead(code, { "content-type": "application/json; charset=utf-8", "content-length": Buffer.byteLength(b) }); res.end(b); };

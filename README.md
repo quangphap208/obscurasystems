@@ -53,9 +53,15 @@ npm run fe     # bot Telegram (long polling)
 
 Hoặc 24/7 bằng pm2:
 ```bash
-pm2 start ecosystem.config.cjs   # 2 app: kol-fe, kol-be
+pm2 start ecosystem.config.cjs   # kol-fe, kol-be, kol-be-j7, kol-dash
 pm2 logs
 ```
+
+## Analytics & Admin dashboard
+
+Bot ghi event (`user_actions`, `payments`, `delivery_stats`) → dashboard đọc-aggregate +
+quản PRO qua browser: `npm run dash` (cần `DASH_PASSWORD`, bind 127.0.0.1 — truy cập qua
+SSH tunnel). Chi tiết: [docs/ANALYTICS.md](docs/ANALYTICS.md).
 
 ## Kiểm thử nhanh (không cần network)
 
