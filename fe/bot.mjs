@@ -7,7 +7,7 @@ import * as repo from "../shared/repo.mjs";
 import { track, touch } from "../shared/track.mjs";
 import { paymentHook } from "../shared/slack.mjs";
 import { byKey, GATE_TEXT } from "../shared/settings.mjs";
-import { resolveHandle, parseHandle } from "./xsearch.mjs";
+import { resolveHandle, resolveHandles, parseHandle } from "./xsearch.mjs";
 import { startPoller as startCryptoPoller, makeInvoice, verifyManual, cryptoEnabled } from "./crypto-pay.mjs";
 import {
   welcomeScreen, referralScreen, globalSettingsScreen, accountSettingsScreen,
@@ -107,6 +107,72 @@ bot.command("add", async (ctx) => {
   await repo.addWatch(ctx.from.id, r.found ? r.handle : handle, r.xid || null);
   track(ctx.from.id, "add", { handle: r.found ? r.handle : handle, result: "ok" });
   await ctx.reply(`✅ Added <b>@${esc(r.found ? r.handle : handle)}</b>. Notifications will arrive shortly.\nCustomize it: 👀 X accounts.`, HTML());
+});
+
+// ---------- /bulkadd /bulkremove — dán list từ tracker khác ----------
+// Token cách nhau bởi khoảng trắng / xuống dòng / phẩy; nhận @handle lẫn link x.com. Cap 100/lần.
+// Validate cả batch qua 1-2 request Bloom search (không N request); tracker-sync tự nhặt watch mới (≤20s).
+const BULK_CAP = 100;
+const listNames = (a, cap = 20) => a.slice(0, cap).map((h) => `@${esc(h)}`).join(", ") + (a.length > cap ? ` +${a.length - cap}` : "");
+function parseBulk(raw) {
+  const seen = new Set(); const handles = []; let invalid = 0;
+  for (const t of raw.split(/[\s,;]+/).filter(Boolean)) {
+    const h = parseHandle(t);
+    if (!h) { invalid++; continue; }
+    if (!seen.has(h)) { seen.add(h); handles.push(h); }
+  }
+  return { handles, invalid };
+}
+bot.command("bulkadd", async (ctx) => {
+  const raw = (ctx.match || "").trim();
+  if (!raw) return ctx.reply(
+    "📦 <b>Bulk add</b> — paste a list of usernames (from any tracker), separated by spaces, commas or new lines:\n" +
+    "<code>/bulkadd elonmusk @cz_binance https://x.com/vitalikbuterin …</code>", HTML());
+  const u = await repo.ensureUser(ctx.from.id, ctx.from.username);
+  if (!repo.hasAccess(u)) return ctx.reply(`⌛ Your ${u.tier === "Free" ? "free trial" : "plan"} has ended.${cfg.subsEnabled ? "\nUse <b>/subscribe</b> to keep tracking accounts." : ""}`, HTML());
+  const { handles, invalid } = parseBulk(raw);
+  if (!handles.length) return ctx.reply("❌ No valid usernames found in that list.", HTML());
+  const over = Math.max(0, handles.length - BULK_CAP);
+  const list = handles.slice(0, BULK_CAP);
+  if (list.length > 10) await ctx.reply(`⏳ Checking <b>${list.length}</b> accounts…`, HTML());
+
+  const resolved = await resolveHandles(list);   // Map rỗng = Bloom search unavailable -> thêm không validate
+  const added = [], already = [], notFound = [], overLimit = [];
+  let n = await repo.countWatches(ctx.from.id);
+  for (const h of list) {
+    const r = resolved.get(h);
+    if (r?.found === false) { notFound.push(h); continue; }
+    const handle = r?.handle || h;
+    if (await repo.getWatch(ctx.from.id, handle)) { already.push(handle); continue; }
+    if (n >= (u.account_limit ?? 0)) { overLimit.push(handle); continue; }
+    await repo.addWatch(ctx.from.id, handle, r?.xid || null);
+    added.push(handle); n++;
+  }
+  track(ctx.from.id, "bulkadd", { n: list.length, ok: added.length, dup: already.length, nf: notFound.length, lim: overLimit.length, inv: invalid });
+
+  let out = `📦 <b>Bulk add: ${added.length}/${list.length}</b>\n`;
+  if (added.length) out += `\n✅ Added (${added.length}): ${listNames(added)}`;
+  if (already.length) out += `\n↩️ Already watching (${already.length}): ${listNames(already)}`;
+  if (notFound.length) out += `\n❌ Not found on X (${notFound.length}): ${listNames(notFound)}`;
+  if (overLimit.length) out += `\n⚠️ Over your <b>${u.account_limit}</b>-account limit — skipped (${overLimit.length}): ${listNames(overLimit)}` +
+    (cfg.subsEnabled ? `\nUse <b>/subscribe</b> to raise the limit.` : "");
+  if (invalid) out += `\n🚮 Ignored ${invalid} invalid token(s).`;
+  if (over) out += `\n✂️ List capped at ${BULK_CAP} — resend the remaining ${over}.`;
+  if (added.length) out += `\n\nNotifications will start shortly. Customize: 👀 X accounts.`;
+  await ctx.reply(out, HTML());
+});
+bot.command("bulkremove", async (ctx) => {
+  const raw = (ctx.match || "").trim();
+  if (!raw) return ctx.reply("🗑 <b>Bulk remove</b>:\n<code>/bulkremove user1 user2 …</code>", HTML());
+  const { handles } = parseBulk(raw);
+  if (!handles.length) return ctx.reply("❌ No valid usernames found.", HTML());
+  const removed = [], missing = [];
+  for (const h of handles.slice(0, BULK_CAP)) (await repo.removeWatch(ctx.from.id, h)) ? removed.push(h) : missing.push(h);
+  track(ctx.from.id, "bulkremove", { n: handles.length, ok: removed.length });
+  let out = `🗑 <b>Bulk remove: ${removed.length}/${Math.min(handles.length, BULK_CAP)}</b>`;
+  if (removed.length) out += `\n✅ Unfollowed (${removed.length}): ${listNames(removed)}`;
+  if (missing.length) out += `\n❔ Not in your list (${missing.length}): ${listNames(missing)}`;
+  await ctx.reply(out, HTML());
 });
 
 bot.command("remove", async (ctx) => {
@@ -431,12 +497,14 @@ const userCommands = [
   { command: "start", description: "main menu" },
   { command: "add", description: "/add username or link | track a new X account" },
   { command: "remove", description: "/remove username | stop tracking an account" },
+  { command: "bulkadd", description: "/bulkadd user1 user2 … | track a whole list at once" },
+  { command: "bulkremove", description: "/bulkremove user1 user2 … | untrack many at once" },
   { command: "accounts", description: "view tracked accounts" },
   { command: "settings", description: "notification settings per account" },
   { command: "ref", description: "your referral link & points" },
   ...(cfg.subsEnabled ? [{ command: "subscribe", description: "upgrade your plan" }] : []),
   { command: "support", description: "/support <message> | report an issue to the team" },
-  // ẩn tạm cho tới khi có handler: bulkremove, mute, ca
+  // ẩn tạm cho tới khi có handler: mute, ca
 ];
 await bot.api.setMyCommands(userCommands);
 // Lệnh admin — CHỈ hiện trong menu của admin (scope theo chat), user khác không thấy.

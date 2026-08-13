@@ -26,6 +26,34 @@ async function keyFor(session) {
   return key;
 }
 
+// Batch validate cho /bulkadd: N handle -> Map(handle -> {found, xid?, handle?}). 1 request search
+// mỗi 50 handle (CHUNK an toàn như profile-poller). Pool trống / request lỗi -> Map rỗng (caller
+// thêm KHÔNG validate, BE reconciler resolve x_user_id sau — cùng semantics resolveHandle skipped).
+export async function resolveHandles(handles) {
+  const out = new Map();
+  const accounts = await repo.listBloomAccounts(true);
+  if (!accounts.length) return out;
+  const acc = accounts[0];
+  try {
+    const key = await keyFor(acc.session_token);
+    for (let i = 0; i < handles.length; i += 50) {
+      const chunk = handles.slice(i, i + 50);
+      const { found } = await searchUsers(acc.session_token, key, chunk);
+      const fmap = new Map((found || []).map((u) => {
+        const h = String(u.twitter_handle || u.handle || u.username || u.screen_name || "").replace(/^@/, "").toLowerCase();
+        return [h, u];
+      }));
+      for (const h of chunk) {
+        const u = fmap.get(h);
+        out.set(h, u
+          ? { found: true, xid: u.twitter_id || u.id || null, handle: String(u.twitter_handle || u.handle || u.username || h).replace(/^@/, "") }
+          : { found: false });
+      }
+    }
+  } catch (e) { console.warn("[xsearch bulk]", e.message); out.clear(); }   // lỗi giữa chừng -> coi như skip validate toàn bộ
+  return out;
+}
+
 // -> { skipped } | { found:false } | { found:true, xid, handle }
 export async function resolveHandle(handle) {
   const accounts = await repo.listBloomAccounts(true);
