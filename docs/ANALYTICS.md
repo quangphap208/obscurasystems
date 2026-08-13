@@ -91,9 +91,13 @@ UI. **Không** log mỗi DM gửi ra thành event (fan-out lớn) — đo qua `d
 
 ```bash
 # VPS
-git pull && npm run migrate            # index mới (user_actions, payments)
+git pull
 # .env: thêm DASH_PASSWORD=<openssl rand -hex 12> (DASH_PORT/DASH_BIND mặc định 5050/127.0.0.1)
 pm2 restart kol-fe kol-be kol-be-j7    # ăn track() + delivery rollup + payments audit
 pm2 start ecosystem.config.cjs --only kol-dash
 # máy local: ssh -L 5050:127.0.0.1:5050 <vps> → http://localhost:5050
 ```
+
+> `npm run migrate` KHÔNG bắt buộc: `connect()` tự `ensureIndexes()` mỗi lần process boot
+> (idempotent). Script chỉ hữu ích khi muốn tạo index tường minh + xem thống kê collection
+> trước khi chạy — và index analytics đã được tạo trên Atlas từ lúc triển khai.
