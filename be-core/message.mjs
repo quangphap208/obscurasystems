@@ -54,16 +54,17 @@ const PLAT = {
   truth: { emoji: "🟣", verb: "posted on Truth",     btn: "View on Truth" },
   ig:    { emoji: "📸", verb: "posted on Instagram", btn: "View on Instagram" },
 };
-// CTA ref đặt TRONG THÂN TIN (text_link), KHÔNG phải inline button: tin DM khi user forward ra ngoài
-// bị Telegram STRIP toàn bộ inline keyboard (kể cả nút URL — nút chỉ sống khi forward bài CHANNEL).
-// Chỉ text + entities sống sót -> link chữ mới đi theo forward. Payload `<refId>_s_fwd` FE parse ĐƯỢC cả
-// referral(=refId, forwarder nhận join-points) LẪN source("fwd"). Explicit link_preview_options -> footer
-// không cướp preview. refId=null -> không gắn.
-function refFooter(botUser, refId) {
-  return (botUser && refId) ? `\n\n🕶 <a href="https://t.me/${botUser}?start=${refId}_s_fwd">Try Obscura free</a>` : "";
+// CTA ref = nút URL hàng RIÊNG. Quy tắc forward bot-DM (test thực nghiệm 13/8/2026, KHÔNG có trong
+// docs Telegram): keyboard TOÀN nút URL (mọi số nút/hàng) -> GIỮ nguyên khi forward; chỉ cần dính
+// 1 nút callback (vd 🗑 Delete) -> Telegram strip TOÀN BỘ keyboard. Vì vậy delete_button đã tắt+ẩn
+// toàn hệ (shared/settings.mjs) để keyboard luôn URL-only -> View Tweet + nút ref sống qua forward.
+// Payload `<refId>_s_fwd` FE parse ĐƯỢC cả referral(=refId, forwarder nhận join-points) LẪN source("fwd").
+// refId=null -> không gắn (gate REF_FWD_CTA ở dispatch).
+function refRow(botUser, refId) {
+  return (botUser && refId) ? [{ text: "🕶 Try Obscura free", url: `https://t.me/${botUser}?start=${refId}_s_fwd` }] : null;
 }
 
-function buildPlatformMessage(e, { deleteButton = true, botUser, refId = null } = {}) {
+function buildPlatformMessage(e, { deleteButton = false, botUser, refId = null } = {}) {
   const p = PLAT[e.platform]; if (!p) return null;
   const author = e.actor, target = e.target;
   const nPhotos = (e.images || []).length, video = !!e.hasVideo;
@@ -88,15 +89,19 @@ function buildPlatformMessage(e, { deleteButton = true, botUser, refId = null } 
     : e.postUrl ? { url: e.postUrl, show_above_text: true, prefer_large_media: true }
     : { is_disabled: true };
 
+  const rows = [];
   const row = [];
   if (deleteButton) row.push({ text: "🗑 Delete", callback_data: "del" });
   if (e.postUrl) row.push({ text: p.btn, url: e.postUrl });
-  return { text: text + refFooter(botUser, refId), link_preview_options: lpo, reply_markup: row.length ? { inline_keyboard: [row] } : undefined };
+  if (row.length) rows.push(row);
+  const rr = refRow(botUser, refId); if (rr) rows.push(rr);
+  return { text, link_preview_options: lpo, reply_markup: rows.length ? { inline_keyboard: rows } : undefined };
 }
 
 // Dựng { text(HTML), link_preview_options, reply_markup } cho Bot API.
-// deleteButton: hiện nút 🗑 Delete (setting delete_button; mặc định bật).
-export function buildMessage(e, { botUser, deleteButton = true, refId = null } = {}) {
+// deleteButton: nút 🗑 Delete (setting delete_button — nay TẮT+ẨN toàn hệ, DB migrate =0 13/8/2026:
+// callback này làm Telegram strip cả keyboard khi user forward tin, xem comment refRow).
+export function buildMessage(e, { botUser, deleteButton = false, refId = null } = {}) {
   const k = e.kind;
   if (k === "platform") return buildPlatformMessage(e, { deleteButton, botUser, refId });
   const meta = ACT[k]; if (!meta) return null;
@@ -165,7 +170,8 @@ export function buildMessage(e, { botUser, deleteButton = true, refId = null } =
     if (e.tweetId && author) row.push({ text: "View Tweet", url: `https://x.com/${author}/status/${e.tweetId}` });
     if (row.length) rows.push(row);
   }
-  return { text: text + refFooter(botUser, refId), link_preview_options: lpo, reply_markup: rows.length ? { inline_keyboard: rows } : undefined };
+  const rr = refRow(botUser, refId); if (rr) rows.push(rr);
+  return { text, link_preview_options: lpo, reply_markup: rows.length ? { inline_keyboard: rows } : undefined };
 }
 
 export { ACT, esc };

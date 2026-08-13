@@ -27,8 +27,10 @@ export const SETTINGS = [
   { key: "pins",             col: "pins",              group: "new", def: 0, gate: null },   // j7 phát event pin (Bloom không) — chỉ bắn cho account j7 cover
   { key: "unpins",           col: "unpins",            group: "new", def: 0, gate: null },
   { key: "affiliations",     col: "affiliations",      group: "new", def: 0, gate: null },
-  // Hiển thị: bật/tắt nút inline 🗑 Delete trên mỗi tin noti (KHÔNG map event -> không lọc loại tin).
-  { key: "deleteButton",     col: "delete_button",     group: "new", def: 1, gate: null },
+  // Nút inline 🗑 Delete trên noti (KHÔNG map event -> không lọc loại tin). TẮT + ẨN (13/8/2026):
+  // callback button khiến Telegram strip TOÀN BỘ keyboard khi user forward tin — keyboard phải toàn
+  // URL để View Tweet + nút ref sống qua forward (quy tắc test: be-core/message.mjs). DB đã migrate =0.
+  { key: "deleteButton",     col: "delete_button",     group: "new", def: 0, gate: null, hidden: true },
   // Master enable Truth/IG (nguồn j7). hidden: KHÔNG hiện ở grid Global Settings — quản qua picker riêng
   // (fe platformScreen). Post platform giao khi user BẬT khoá này + có platform-watch handle đó.
   { key: "truth",            col: "truth",             group: "new", def: 0, gate: null, hidden: true },

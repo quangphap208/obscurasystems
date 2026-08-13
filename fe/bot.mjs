@@ -379,6 +379,9 @@ bot.on("callback_query:data", async (ctx) => {
 async function toggle(ctx, s, scope) {
   if (!s) return ctx.answerCallbackQuery();
   if (s.gate) return ctx.answerCallbackQuery({ text: GATE_TEXT[s.gate], show_alert: true });
+  // Khoá đã gỡ khỏi UI (vd deleteButton) nhưng nút còn trên màn settings CŨ trong chat -> no-op,
+  // không cho toggle ngầm (deleteButton bật lại = keyboard dính callback = mất nút khi forward).
+  if (s.hidden) return ctx.answerCallbackQuery();
   const uid = ctx.from.id;
   if (scope.type === "g") {
     const cur = (await repo.getGlobalSettings(uid))[s.col];
