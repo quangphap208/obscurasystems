@@ -11,9 +11,14 @@ import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { cfg } from "../shared/config.mjs";
+import { cfg, ROOT_DIR } from "../shared/config.mjs";
 import { connect, col, now } from "../shared/mongo.mjs";
 import * as repo from "../shared/repo.mjs";
+import { loadToken, saveToken, tokenExp, daysLeft, sessionCheck } from "../be-j7/session.mjs";
+
+// j7 token: file rotate của BE j7 (ưu tiên) — dashboard chạy cùng máy BE (pm2 cùng ecosystem)
+const J7_TOKEN_FILE = join(ROOT_DIR, "be-j7", "state", "j7_token.txt");
+const mask = (t) => (t ? `${t.slice(0, 6)}…${t.slice(-4)}` : null);
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 if (!cfg.dashPassword) { console.error("Thiếu DASH_PASSWORD trong .env — dashboard không chạy."); process.exit(1); }
@@ -128,6 +133,27 @@ const api = {
     ]);
     return { rows, totals };
   },
+  // Session 2 nguồn feed: pool Bloom (bloom_accounts + load/last-event từ tracked_handles) + JWT j7.
+  async sessions() {
+    const [accs, loads, j7list] = await Promise.all([
+      repo.listBloomAccounts(false),
+      col("tracked_handles").aggregate([{ $group: { _id: "$bloom_account_id", n: { $sum: 1 }, last: { $max: "$last_event_at" } } }]).toArray(),
+      repo.getJ7List().catch(() => null),
+    ]);
+    const lmap = Object.fromEntries(loads.map((l) => [l._id, l]));
+    const token = loadToken(J7_TOKEN_FILE, cfg.j7Session);
+    return {
+      bloom: accs.map((a) => ({
+        id: a.id, label: a.label, status: a.status, capacity: a.capacity,
+        load: lmap[a.id]?.n || 0, last_event_at: lmap[a.id]?.last || null, token: mask(a.session_token),
+      })),
+      j7: {
+        host: cfg.j7Host, token: mask(token), exp_at: token ? tokenExp(token) : 0,
+        days_left: token ? Math.round(daysLeft(token) * 10) / 10 : null,
+        list_main: j7list?.main?.length || 0, list_updated_at: j7list?.updated_at || null,
+      },
+    };
+  },
   async proUsers() {
     const users = await col("users").find({ $or: [{ tier: { $ne: "Free" } }, { expires_at: { $ne: null } }] })
       .project({ username: 1, tier: 1, account_limit: 1, expires_at: 1, last_active_at: 1, created_at: 1 }).sort({ tier: 1, expires_at: 1 }).toArray();
@@ -161,6 +187,41 @@ async function proAction(body) {
   return { ok: true, result };
 }
 
+// Quản session nguồn feed. KHÔNG lưu token trần vào audit (chỉ preview). Token mới chỉ có hiệu lực
+// sau restart BE tương ứng (shard/socket dùng token lúc launch) — result nhắc rõ.
+async function sessionAction(body) {
+  const { action, id, token, status, capacity } = body;
+  let result, target = null;
+  if (action === "bloom_token") {
+    if (!Number(id) || !token?.trim()) return { error: "cần id + token" };
+    const acc = await repo.getBloomAccount(id);
+    if (!acc) return { error: `shard ${id} không tồn tại` };
+    await repo.upsertBloomAccount({ ...acc, id: Number(id), session_token: token.trim(), status: "active" });
+    target = Number(id); result = `shard ${id}: token mới + active — pm2 restart kol-be để áp dụng`;
+  } else if (action === "bloom_status") {
+    if (!Number(id) || !["active", "disabled"].includes(status)) return { error: "cần id + status active|disabled" };
+    await repo.setBloomStatus(id, status);
+    target = Number(id); result = `shard ${id} -> ${status} — restart kol-be để áp dụng`;
+  } else if (action === "bloom_capacity") {
+    if (!Number(id) || !(Number(capacity) > 0)) return { error: "cần id + capacity > 0" };
+    await repo.setBloomCapacity(id, Number(capacity));
+    target = Number(id); result = `shard ${id} capacity=${Number(capacity)} (tracker-sync tự ăn, không cần restart)`;
+  } else if (action === "j7_check") {
+    const cur = loadToken(J7_TOKEN_FILE, cfg.j7Session);
+    if (!cur) return { error: "chưa có j7 token" };
+    const r = await sessionCheck(cfg.j7Host, cur).catch((e) => ({ err: e.message }));
+    if (r.err) return { error: `session-check lỗi: ${r.err}` };
+    if (r.rotated) saveToken(J7_TOKEN_FILE, r.rotated);
+    result = `j7 ${r.valid ? "✅ valid" : `❌ INVALID (http ${r.status})`}${r.rotated ? " · đã rotate + lưu token mới" : ""}`;
+  } else if (action === "j7_token") {
+    if (!token?.trim()) return { error: "cần token" };
+    saveToken(J7_TOKEN_FILE, token.trim());
+    result = `j7 token đã lưu (${mask(token.trim())}) — pm2 restart kol-be-j7 để áp dụng`;
+  } else return { error: "action không hợp lệ" };
+  await col("admin_actions").insertOne({ via: "dash", action: `session:${action}`, target, at: now() });
+  return { ok: true, result };
+}
+
 // ---------- HTTP ----------
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
@@ -191,11 +252,12 @@ const server = createServer(async (req, res) => {
       if (url.pathname === "/api/session") return sess ? json(res, 200, { ok: true, csrf: sess.csrf }) : json(res, 401, { error: "unauth" });
       if (!sess) return json(res, 401, { error: "unauth" });
       if (req.method === "POST" && url.pathname === "/api/logout") { SESS.delete(cookies(req).dash); res.setHeader("set-cookie", "dash=; Path=/; Max-Age=0"); return json(res, 200, { ok: true }); }
-      if (req.method === "POST" && url.pathname === "/api/pro-action") {
+      if (req.method === "POST" && (url.pathname === "/api/pro-action" || url.pathname === "/api/session-action")) {
         if (req.headers["x-csrf"] !== sess.csrf) return json(res, 403, { error: "CSRF" });   // cookie-only request (cross-site) không có token
-        return json(res, 200, await proAction(JSON.parse(await readBody(req) || "{}")));
+        const body = JSON.parse(await readBody(req) || "{}");
+        return json(res, 200, await (url.pathname === "/api/pro-action" ? proAction(body) : sessionAction(body)));
       }
-      const name = { "/api/overview": "overview", "/api/activity": "activity", "/api/deliveries": "deliveries", "/api/hourly": "hourly", "/api/actions": "actions", "/api/recent": "recent", "/api/top-handles": "topHandles", "/api/sources": "sources", "/api/payments": "payments", "/api/pro-users": "proUsers" }[url.pathname];
+      const name = { "/api/overview": "overview", "/api/activity": "activity", "/api/deliveries": "deliveries", "/api/hourly": "hourly", "/api/actions": "actions", "/api/recent": "recent", "/api/top-handles": "topHandles", "/api/sources": "sources", "/api/payments": "payments", "/api/pro-users": "proUsers", "/api/sessions": "sessions" }[url.pathname];
       if (name && req.method === "GET") return json(res, 200, await api[name](url.searchParams));
       return json(res, 404, { error: "not found" });
     }

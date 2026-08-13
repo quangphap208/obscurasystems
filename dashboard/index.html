@@ -80,6 +80,17 @@
     <div class="card"><h2>Loại action (7d)</h2><div id="tActions"></div></div>
   </div>
   <div>
+    <div class="card"><h2>Session nguồn feed (Bloom · j7)</h2>
+      <div id="tSessions"></div>
+      <div class="row" style="margin-top:10px">
+        <input id="sId" placeholder="shard id" style="width:70px">
+        <input id="sToken" placeholder="token mới (Bloom/j7)" style="flex:1;min-width:180px">
+        <button onclick="sess('bloom_token')">Đổi token Bloom</button>
+        <button onclick="sess('j7_token')">Đổi token j7</button>
+        <button onclick="sess('j7_check')">Check j7</button>
+      </div>
+      <div id="sMsg" style="font-size:12px;margin-top:6px"></div>
+    </div>
     <div class="card"><h2>Quản lý PRO / Whitelist</h2>
       <div class="row">
         <input id="pTg" placeholder="tg_id"><input id="pLimit" placeholder="limit"><input id="pDays" placeholder="days (trống=∞)">
@@ -153,10 +164,19 @@ function fillDays(rows, days, get) {
 }
 
 async function loadAll() {
-  const [ov, act, del, hr, tops, src, acts, pay, pro, rec] = await Promise.all([
+  const [ov, act, del, hr, tops, src, acts, pay, pro, rec, ses] = await Promise.all([
     api("/api/overview"), api("/api/activity?days=14"), api("/api/deliveries?days=14"), api("/api/hourly"),
-    api("/api/top-handles"), api("/api/sources"), api("/api/actions?days=7"), api("/api/payments"), api("/api/pro-users"), api("/api/recent"),
+    api("/api/top-handles"), api("/api/sources"), api("/api/actions?days=7"), api("/api/payments"), api("/api/pro-users"), api("/api/recent"), api("/api/sessions"),
   ]);
+  // session nguồn: Bloom mỗi shard 1 dòng + j7 1 dòng
+  const sPill = (s) => s === "active" ? '<span class="pill ok">active</span>' : `<span class="pill bad">${esc(s || "?")}</span>`;
+  table("tSessions", ["Nguồn", "Trạng thái", "#Load", "Event cuối", "Token"],
+    ses.bloom.map((b) =>
+      `<tr><td>Bloom <b>#${b.id}</b> <span class="dim">${esc(b.label || "")}</span></td><td>${sPill(b.status)}</td>` +
+      `<td class="num">${b.load}/${b.capacity}</td><td class="dim">${ago(b.last_event_at)}</td><td class="dim">${esc(b.token || "—")}</td></tr>`).join("") +
+    `<tr><td>j7 <span class="dim">${esc(ses.j7.host.replace("https://", ""))}</span></td>` +
+    `<td>${ses.j7.days_left == null ? '<span class="pill bad">no token</span>' : ses.j7.days_left < 3 ? `<span class="pill" style="color:var(--warn)">còn ${ses.j7.days_left}d</span>` : `<span class="pill ok">còn ${ses.j7.days_left}d</span>`}</td>` +
+    `<td class="num">${ses.j7.list_main}</td><td class="dim">${ago(ses.j7.list_updated_at)}</td><td class="dim">${esc(ses.j7.token || "—")}</td></tr>`);
   // tiles
   const tiles = [
     ["Users", fmt(ov.total), Object.entries(ov.byTier).map(([t, n]) => `${t} ${n}`).join(" · ")],
@@ -198,6 +218,13 @@ async function loadAll() {
 
   table("tRecent", ["Lúc", "User", "Action", "Meta"], rec.rows.map((r) =>
     `<tr><td class="dim">${new Date(r.at).toISOString().slice(5, 16).replace("T", " ")}</td><td>${r.tg_id}</td><td>${esc(r.action)}</td><td class="dim">${esc(JSON.stringify(r.meta || "")).slice(0, 60)}</td></tr>`).join(""));
+}
+
+async function sess(action) {
+  const d = await api("/api/session-action", { method: "POST", headers: { "content-type": "application/json", "x-csrf": CSRF },
+    body: JSON.stringify({ action, id: $("sId").value, token: $("sToken").value }) });
+  $("sMsg").innerHTML = d.ok ? `<span class="ok">✅ ${esc(d.result)}</span>` : `<span class="bad">❌ ${esc(d.error)}</span>`;
+  if (d.ok) { $("sToken").value = ""; loadAll(); }
 }
 
 async function pro(action) {
