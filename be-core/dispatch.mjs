@@ -41,6 +41,28 @@ async function resolveHandle(e) {
   return null;
 }
 
+// Rollup số DM đã gửi -> delivery_stats {_id:"YYYY-MM-DD", n, kind.*, src.*}. Đếm in-memory
+// (zero cost hot path), flush $inc mỗi 60s; restart mất tối đa 60s số liệu — chấp nhận cho analytics.
+const _dcnt = new Map();   // date -> { n, kind:{}, src:{} }
+let _dtimer = null;
+function bumpDelivered(kindKey, source) {
+  const d = new Date().toISOString().slice(0, 10);
+  const c = _dcnt.get(d) || { n: 0, kind: {}, src: {} };
+  c.n++; c.kind[kindKey] = (c.kind[kindKey] || 0) + 1;
+  const s = source || "bloom"; c.src[s] = (c.src[s] || 0) + 1;
+  _dcnt.set(d, c);
+  if (!_dtimer) { _dtimer = setInterval(flushDelivered, 60000); _dtimer.unref?.(); }
+}
+async function flushDelivered() {
+  for (const [d, c] of [..._dcnt]) {
+    _dcnt.delete(d);
+    const inc = { n: c.n };
+    for (const [k, v] of Object.entries(c.kind)) inc[`kind.${k}`] = v;
+    for (const [s, v] of Object.entries(c.src)) inc[`src.${s}`] = v;
+    try { await repo.bumpDeliveryStats(d, inc); } catch (e) { console.warn("[dstats]", e.message); }
+  }
+}
+
 // Áp bộ lọc media theo settings: tắt photos/videos -> gỡ media (vẫn gửi text).
 function applyMediaFilter(e, s) {
   let images = e.images || [], hasVideo = !!e.hasVideo;
@@ -118,6 +140,7 @@ export function makeDispatcher({ tg, getBotUser, warmupUntil = 0 }) {
         const msg = buildMessage(ev, { botUser, deleteButton: !!settings.delete_button, refId: cfg.refForwardCta ? tgId : null });
         if (!msg) continue;
         tg.send(tgId, msg, { priority: e.kind === "deleted" });   // delete chen lên đầu hàng đợi
+        bumpDelivered(isPlat ? e.platform : e.kind, e.source);
         sent++;
       }
       // In target cho follow/unfollow: 2 dòng "followed @actor" trông giống nhau có thể là 2 TARGET

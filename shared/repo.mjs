@@ -94,6 +94,24 @@ export async function applyPurchase(tgId, kind) {
   return { kind, tier, account_limit: limit, expires_at: expiresAt, days };
 }
 
+// ---------- payments (audit trail thống nhất Stars + crypto — gap docs/DASHBOARD.md §2) ----------
+// _id idempotent theo ref (charge_id Stars / tx sig crypto) -> retry/re-parse không double-record.
+// amount: Stars = số sao (int) · crypto = chuỗi display ("10.000482"). usd: crypto = price_usd, Stars = null.
+export async function recordPayment({ tgId, method, kind, amount, currency, usd = null, ref }) {
+  try {
+    await col("payments").updateOne(
+      { _id: `${method}:${ref}` },
+      { $setOnInsert: { tg_id: Number(tgId), method, kind, amount, currency, usd, ref, at: now() } },
+      { upsert: true });
+  } catch (e) { console.warn("[payments]", e.message); }   // audit không được làm hỏng flow credit
+}
+
+// delivery_stats: rollup /ngày số DM noti đã gửi. Dispatcher đếm in-memory, flush $inc mỗi 60s
+// (_id = "YYYY-MM-DD", inc = {n, kind.<kind>, src.<source>}). Mất tối đa 60s data khi restart — chấp nhận.
+export async function bumpDeliveryStats(date, inc) {
+  await col("delivery_stats").updateOne({ _id: date }, { $inc: inc, $set: { updated_at: now() } }, { upsert: true });
+}
+
 // Sweep HẾT HẠN (trial Free HOẶC gói trả phí) -> PAUSE toàn bộ watch (X + platform), báo 1 lần.
 // Không còn free-forever: hết hạn = ngừng dịch vụ tới khi /subscribe. Gia hạn (applyPurchase) un-pause hết.
 // Giữ expires_at (quá khứ) + expired_notified=true -> không sweep/notify lại. docs/PAYMENT_RESEARCH.md §9.

@@ -193,6 +193,7 @@ bot.on("message:successful_payment", async (ctx) => {
   const kind = pay.invoice_payload || "pro";
   const res = await repo.applyPurchase(ctx.from.id, kind);
   track(ctx.from.id, "paid_stars", { kind, stars: pay.total_amount });
+  await repo.recordPayment({ tgId: ctx.from.id, method: "stars", kind, amount: pay.total_amount, currency: "XTR", ref: pay.telegram_payment_charge_id });
   paymentHook(`✅ Stars PAID · ${ctx.from.username ? "@" + ctx.from.username : ""} (${ctx.from.id}) · ${kind} · ${pay.total_amount}⭐ · limit ${res?.account_limit ?? "?"}`);
   await repo.markReferralSubscribed(ctx.from.id);
   const ref = await repo.awardRefConvert(ctx.from.id, { amount: pay.total_amount, currency: pay.currency, chargeId: pay.telegram_payment_charge_id });

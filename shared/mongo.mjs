@@ -49,4 +49,7 @@ async function ensureIndexes(db) {
   await db.collection("user_actions").createIndex({ at: 1 }, { expireAfterSeconds: 90 * 24 * 3600 });
   await db.collection("user_actions").createIndex({ tg_id: 1, at: -1 });
   await db.collection("user_actions").createIndex({ action: 1, at: -1 });
+  // payments: audit vĩnh viễn (không TTL) — đối soát doanh thu
+  await db.collection("payments").createIndex({ tg_id: 1, at: -1 });
+  await db.collection("payments").createIndex({ at: -1 });
 }

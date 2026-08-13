@@ -124,6 +124,7 @@ async function tryCredit(bot, sig, tx, wallet) {
     if (!hit) continue;
     if (!(await repo.claimInvoice(hit._id, sig))) return null;   // đã credit trước đó
     const res = await repo.applyPurchase(hit.tg_id, hit.kind);
+    await repo.recordPayment({ tgId: hit.tg_id, method: "crypto", kind: hit.kind, amount: hit.display, currency: c.label, usd: hit.price_usd ?? null, ref: sig });
     await repo.markReferralSubscribed(hit.tg_id);
     await repo.awardRefConvert(hit.tg_id, { amount: hit.price_usd, currency: c.label, chargeId: sig });
     dbg("credited", hit._id, coin, hit.kind, "ví", wallet.slice(0, 6), "-> limit", res?.account_limit);
