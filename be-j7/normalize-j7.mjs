@@ -27,8 +27,17 @@ export function normalizeJ7(raw, kind) {
   return normTweet(raw);                                            // "tweet" | "initial"
 }
 
+// j7 đẩy PHẢN HỒI LỆNH tracker của CHÍNH NÓ (author "bot") vào kênh tweet — vd khi tracker-sync-j7
+// add/remove: "[error] Failed to add @x: You have reached your limit for this resource…" /
+// "[success] Successfully added @x to watch list!\nPlan usage: 1500/1500". KHÔNG phải tweet thật ->
+// drop, kẻo user watch @bot (account X thật, có người watch) nhận rác hệ thống làm alert (bug 14/8).
+// Match theo NỘI DUNG (prefix + cụm đặc trưng), không theo tên author — đổi tên bot vẫn chặn đúng,
+// và tweet thật của @bot không dính (xác suất text trùng cả 2 vế ~0).
+const J7_SYS_MSG = (t) => /^\[(?:error|success)\]\s/.test(t) && /watch list|Plan usage|limit for this resource/i.test(t);
+
 // tweet / retweet / quote / reply — shape j7 gần trùng canonical.
 function normTweet(raw) {
+  if (J7_SYS_MSG(raw.text || "")) return null;
   const a = raw.author || {};
   const type = String(raw.type || "TWEET").toUpperCase();
   const sub = raw.isRetweet || type === "RETWEET" ? "retweet"
