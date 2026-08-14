@@ -49,6 +49,11 @@ function buildProfileBody(field, oldV, newV) {
   return lines.join("\n");
 }
 
+// Cắt body ĐÃ escape về ≤3500 (long-form X tới 25k ký tự -> sendMessage 400 "message is too long",
+// KHÔNG retry được = mất alert; thấy 13 lần trong log 14/8). Cắt SAU esc: body không chứa tag nên
+// lỡ đứt giữa entity (&amp;) chỉ xấu 1 ký tự cuối, không gây 400 parse; head+nút còn dư trần 4096.
+const clip = (s, n = 3500) => (s.length > n ? s.slice(0, n) + "…" : s);
+
 // Post nền tảng ngoài X (Truth Social / Instagram, kind="platform"). Link gốc của nền tảng, KHÔNG fxtwitter.
 const PLAT = {
   truth: { emoji: "🟣", verb: "posted on Truth",     btn: "View on Truth" },
@@ -82,7 +87,7 @@ function buildPlatformMessage(e, { deleteButton = false, botUser, refId = null }
 
   let body = e.content || "";
   if (e.platform === "truth" && e.sub === "reply") body = body.replace(/^(?:@[A-Za-z0-9_.]+\s+)+/, "");
-  const text = head + (e.sub === "post" ? "\n" : "\n\n") + esc(body);
+  const text = head + (e.sub === "post" ? "\n" : "\n\n") + clip(esc(body));
 
   // preview: ảnh/thumbnail tĩnh trực tiếp -> else Telegram unfurl link post -> else tắt.
   const lpo = e.thumb ? { url: e.thumb, show_above_text: true, prefer_large_media: true }
@@ -141,8 +146,8 @@ export function buildMessage(e, { botUser, deleteButton = false, refId = null } 
     // Chỉ cắt ĐÚNG mention của người được reply (không cắt mọi mention đầu body) — relay_bugs Lỗi 2.
     // vd reply @ggreenwald vẫn giữ "@AGHamilton29 …" do tác giả tự gõ.
     if (k === "reply" && target) body = body.replace(new RegExp("^@" + reEsc(target) + "\\s+", "i"), "");
-    // profileChanges body đã chứa HTML (bold field) -> không esc lại
-    text = head + sep + (k === "profileChanges" ? body : esc(body));
+    // profileChanges body đã chứa HTML (bold field) -> không esc lại (và không bao giờ dài -> khỏi clip)
+    text = head + sep + (k === "profileChanges" ? body : clip(esc(body)));
   }
 
   // preview
