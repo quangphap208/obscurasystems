@@ -66,11 +66,10 @@ export class TrackerSyncJ7 {
 
       const desired = new Set(await repo.distinctHandles());
       const needAdd = [...desired].filter((h) => availSet.has(h));                        // pool, chưa stream
-      // Dọn: MỌI handle trong ledger hết ai watch. KHÔNG loại trừ mainSet như trước (fix 14/8):
-      // handle mình add xong là server nhét vào main ngay chu kỳ sau -> điều kiện cũ tự khoá, không bao
-      // giờ dọn được (vd @baseapp) -> plan bò dần tới cap 1500. Ledger là CỦA MÌNH nên gỡ thẳng tay;
-      // lỡ trúng account curated của j7 thì server tự bỏ qua/lỗi (vô hại, chatter đã filter ở normalize).
-      const needRemove = [...this.added].filter((h) => !desired.has(h));
+      // Dọn: handle trong ledger hết ai watch, TRỪ account thuộc main-feed curated của j7 (main do
+      // ĐỘI J7 quản — 14/8 xác nhận: @baseapp trong main là HỌ add, không phải mình; đừng emit remove
+      // vào đồ của họ). Ledger persist Mongo nên restart không còn làm orphan như trước.
+      const needRemove = [...this.added].filter((h) => !desired.has(h) && !mainSet.has(h));
 
       if (needAdd.length) {
         this.feed.emit("custom_accounts_add_available_batch", { sessionId: this.feed.token, accounts: needAdd });
