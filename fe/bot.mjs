@@ -148,7 +148,9 @@ bot.command("bulkadd", async (ctx) => {
     await repo.addWatch(ctx.from.id, handle, r?.xid || null);
     added.push(handle); n++;
   }
-  track(ctx.from.id, "bulkadd", { n: list.length, ok: added.length, dup: already.length, nf: notFound.length, lim: overLimit.length, inv: invalid });
+  // handles: log TỪNG handle đã add (không chỉ số đếm) — cần cho forensics/ledger j7 (bug 14/8:
+  // orphan @baseapp không truy được nguồn vì bulkadd cũ chỉ log count).
+  track(ctx.from.id, "bulkadd", { n: list.length, ok: added.length, dup: already.length, nf: notFound.length, lim: overLimit.length, inv: invalid, handles: added });
 
   let out = `📦 <b>Bulk add: ${added.length}/${list.length}</b>\n`;
   if (added.length) out += `\n✅ Added (${added.length}): ${listNames(added)}`;

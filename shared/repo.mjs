@@ -357,6 +357,12 @@ export async function saveJ7List({ main = [], pool = [] } = {}) {
   await col("j7_list").updateOne({ _id: "__j7list__" }, { $set: { main, pool, updated_at: now() } }, { upsert: true });
 }
 export async function getJ7List() { return col("j7_list").findOne({ _id: "__j7list__" }); }
+// Ledger handle MÌNH đã add vào pool j7 — persist để tracker-sync-j7 dọn được sau restart
+// (server j7 không trả lại custom.accounts nên RAM là nguồn duy nhất -> phải lưu DB).
+export async function getJ7Added() { return (await col("j7_list").findOne({ _id: "__added__" }))?.handles || []; }
+export async function saveJ7Added(handles) {
+  await col("j7_list").updateOne({ _id: "__added__" }, { $set: { handles, updated_at: now() } }, { upsert: true });
+}
 // List global Truth/IG (do tracker-sync-j7 capture free từ response) — cho FE hiện picker.
 export async function saveJ7Platforms({ truth = [], ig = [] } = {}) {
   await col("j7_list").updateOne({ _id: "__platlist__" }, { $set: { truth, ig, updated_at: now() } }, { upsert: true });

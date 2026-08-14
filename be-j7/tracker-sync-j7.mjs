@@ -30,7 +30,10 @@ export class TrackerSyncJ7 {
   // interval mặc định 5 phút: get_all_watched_accounts trả ~7800 account, list đổi CHẬM (vài chục/ngày)
   // -> fetch dày (<1h) tốn kết nối + dễ rate-limit (theo reverse j7-reload). Reconcile vẫn đủ nhạy vì
   // Bloom cover account mới /add NGAY; j7 chỉ cần vào race trong ~5' (pins/unpins KOL mới trễ tối đa 5').
-  start(intervalMs = 300000) {
+  async start(intervalMs = 300000) {
+    // Nạp ledger persist (fix 14/8: RAM-only -> restart quên sạch -> orphan chiếm slot plan vĩnh viễn)
+    try { for (const h of await repo.getJ7Added()) this.added.add(h); console.log(`[j7-sync] ledger: ${this.added.size} handle đã add trước đó`); }
+    catch (e) { console.warn("[j7-sync] load ledger:", e.message); }
     this.feed.on("all_watched_accounts_response", (r) =>
       this.reconcile(r).catch((e) => { console.warn("[j7-sync]", e.message); this.slack(`reconcile lỗi: ${e.message}`); }));
     this.tick();
@@ -63,7 +66,11 @@ export class TrackerSyncJ7 {
 
       const desired = new Set(await repo.distinctHandles());
       const needAdd = [...desired].filter((h) => availSet.has(h));                        // pool, chưa stream
-      const needRemove = [...this.added].filter((h) => !desired.has(h) && !mainSet.has(h)); // đã add, hết ai watch
+      // Dọn: MỌI handle trong ledger hết ai watch. KHÔNG loại trừ mainSet như trước (fix 14/8):
+      // handle mình add xong là server nhét vào main ngay chu kỳ sau -> điều kiện cũ tự khoá, không bao
+      // giờ dọn được (vd @baseapp) -> plan bò dần tới cap 1500. Ledger là CỦA MÌNH nên gỡ thẳng tay;
+      // lỡ trúng account curated của j7 thì server tự bỏ qua/lỗi (vô hại, chatter đã filter ở normalize).
+      const needRemove = [...this.added].filter((h) => !desired.has(h));
 
       if (needAdd.length) {
         this.feed.emit("custom_accounts_add_available_batch", { sessionId: this.feed.token, accounts: needAdd });
@@ -73,6 +80,8 @@ export class TrackerSyncJ7 {
         this.feed.emit("custom_accounts_remove_available_batch", { sessionId: this.feed.token, accounts: needRemove });
         for (const h of needRemove) this.added.delete(h);
       }
+      if (needAdd.length || needRemove.length)
+        await repo.saveJ7Added([...this.added]).catch((e) => console.warn("[j7-sync] save ledger:", e.message));
 
       const covered = [...desired].filter((h) => universe.has(h)).length;
       console.log(`[j7-sync] cover ${covered}/${desired.size} | +add ${needAdd.length} | -rm ${needRemove.length} | bloom-only ${desired.size - covered} | main ${main.length} pool ${pool.length}`);
