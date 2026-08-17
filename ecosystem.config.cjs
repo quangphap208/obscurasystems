@@ -1,4 +1,7 @@
 // pm2 — chạy FE (bot) và BE (engine) như 2 process riêng, tự restart. `pm2 start ecosystem.config.cjs`.
+// time: true = prefix timestamp mỗi dòng log (16/8: chẩn đoán Bloom state-reset bị mù giờ vì log trần).
+// LƯU Ý: đổi option trong file này cần `pm2 delete <app> && pm2 start ecosystem.config.cjs` (restart thường
+// KHÔNG đọc lại config).
 module.exports = {
   apps: [
     {
@@ -8,6 +11,7 @@ module.exports = {
       autorestart: true,
       max_restarts: 20,
       restart_delay: 3000,
+      time: true,
       env: { NODE_ENV: "production" },
     },
     {
@@ -17,6 +21,7 @@ module.exports = {
       autorestart: true,
       max_restarts: 20,
       restart_delay: 5000,
+      time: true,
       env: { NODE_ENV: "production" },
     },
     {
@@ -28,6 +33,7 @@ module.exports = {
       autorestart: true,
       max_restarts: 20,
       restart_delay: 5000,
+      time: true,
       env: { NODE_ENV: "production" },
     },
     {
@@ -40,6 +46,7 @@ module.exports = {
       max_restarts: 20,
       restart_delay: 3000,
       max_memory_restart: "200M",
+      time: true,
       env: { NODE_ENV: "production" },
     },
   ],

@@ -25,13 +25,15 @@ export class TrackerSync {
 
   // toSlack: chỉ các lỗi ĐÁNG BÁO XA (pool đầy, không shard sống, reconcile lỗi). Slack rate-limit 5'
   // riêng để pool-full không bị nuốt bởi 1 alert self-heal trước đó (2 mốc thời gian độc lập).
-  alert(msg, toSlack = false) {
+  // force: bỏ qua rate-limit 60s TG — dùng cho tín hiệu nghiêm trọng (state-reset), không để bị nuốt
+  // bởi 1 alert vặt ngay trước đó.
+  alert(msg, toSlack = false, force = false) {
     console.warn("[tracker-sync]", msg);
     if (toSlack && Date.now() - this.lastSlack > 300000) {
       this.lastSlack = Date.now();
       slackAlert(`⚠️ *Bloom* tracker-sync: ${msg}`);
     }
-    if (Date.now() - this.lastAlert < 60000) return;
+    if (!force && Date.now() - this.lastAlert < 60000) return;
     this.lastAlert = Date.now();
     for (const id of this.adminIds) this.tg.notify(id, `⚠️ <b>Source pool</b>: ${msg}`);
   }
@@ -113,6 +115,11 @@ export class TrackerSync {
         //     drop / sót từ account cũ) -> track lại trên shard đã gán (hoặc shard sống đầu tiên).
         const missing = [...desired].filter((h) => !visibleAll.has(h));
         if (missing.length) {
+          // >20 handle biến mất MỘT LƯỢT = chữ ký Bloom STATE-RESET (maintenance phía Bloom, thấy 16/8:
+          // mất cả 93 handle + default list hồi sinh). Báo TO ngay (TG force + Slack) — khe hở vài phút
+          // này có thể miss tweet (case @ohmyjack 15/8) — thay vì nằm im trong log thường.
+          if (missing.length > 20)
+            this.alert(`🚨 nghi Bloom STATE-RESET: ${missing.length}/${desired.size} handle biến mất khỏi state một lượt — đang tự track lại. Khe hở này có thể miss tweet.`, true, true);
           const assign = new Map((await repo.allTracked()).map((t) => [t.handle, t.bloom_account_id]));
           const byShard = new Map();
           for (const h of missing) {
