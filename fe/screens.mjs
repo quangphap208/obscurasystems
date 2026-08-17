@@ -80,7 +80,10 @@ export function platformScreen(platform, enabled, globalList, followed) {
   } else if (!total) {
     text += `No ${m.name} accounts available yet. Check back later.`;
   } else {
-    text += `Tap to follow / unfollow. ✅ = you'll get their ${m.name} posts.\n<b>${followed.size}</b> followed.`;
+    text += `Tap to follow / unfollow. ✅ = you'll get their ${m.name} posts.\n<b>${followed.size}</b> followed.\n\n` +
+      // Nói RÕ giới hạn (support 17/8): X add account nào cũng được nên user tưởng IG/Truth cũng vậy —
+      // thực tế post đến từ pool capture cố định, không stream account tuỳ ý.
+      `<i>ℹ️ ${m.name} works differently from X: only the accounts listed here are available — custom accounts can't be added yet. Want one included? Tell us via /support.</i>`;
     for (const g of groups) {
       if (g.group) kb.text(`── ${g.group} ──`, "none").row();
       for (const h of g.handles) {
