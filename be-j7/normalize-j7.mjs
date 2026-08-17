@@ -33,12 +33,17 @@ export function normalizeJ7(raw, kind) {
 // drop, kẻo user watch @bot (account X thật, có người watch) nhận rác hệ thống làm alert (bug 14/8).
 // Match theo NỘI DUNG (prefix + cụm đặc trưng), không theo tên author — đổi tên bot vẫn chặn đúng,
 // và tweet thật của @bot không dính (xác suất text trùng cả 2 vế ~0).
-const J7_SYS_MSG = (t) => /^\[(?:error|success)\]\s/.test(t) && /watch list|Plan usage|limit for this resource/i.test(t);
+// 17/8: lọt mẫu mới "Now tracking @x on Binance Square! Usage: ?/30" -> mở rộng cụm từ + thêm nhánh
+// author "bot" làm lưới cuối: prefix [error]/[success] + đúng tên bot hệ thống j7 = chặn cả mẫu câu
+// CHƯA GẶP. Tweet thật của account khác bắt đầu bằng "[success]" vẫn qua (trừ khi account tên "bot").
+const J7_SYS_MSG = (t, author) => /^\[(?:error|success)\]\s/.test(t) &&
+  (/watch list|plan usage|usage:\s|limit for this resource|now tracking|no longer tracking/i.test(t)
+    || (author || "").toLowerCase() === "bot");
 
 // tweet / retweet / quote / reply — shape j7 gần trùng canonical.
 function normTweet(raw) {
-  if (J7_SYS_MSG(raw.text || "")) return null;
   const a = raw.author || {};
+  if (J7_SYS_MSG(raw.text || "", a.handle)) return null;
   const type = String(raw.type || "TWEET").toUpperCase();
   const sub = raw.isRetweet || type === "RETWEET" ? "retweet"
             : raw.isQuote   || type === "QUOTE"   ? "quote"
