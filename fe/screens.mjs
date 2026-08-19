@@ -174,6 +174,10 @@ export function accountsScreen(watches) {
 // /subscribe — bảng gói (Free/Pro/Whale + pack). Giá lấy từ cfg. Xem docs/PAYMENT_RESEARCH.md §2.
 export function subscribeScreen(user, c) {
   const crypto = c.receiveSolAddresses?.length > 0 && c.solanaRpcUrls?.length > 0;   // chỉ nudge crypto khi đã bật
+  // User ĐANG là tier đó (còn hạn): nút thành "Renew +Nd" — support 19/8: nhãn "Pro · 30 acc" bị đọc
+  // thành "+30 accounts", user mua lại Pro để mong thêm slot. Renew = cộng NGÀY, slot mua bằng Pack.
+  const onTier = (t) => user?.tier === t && !isPlanExpired(user);
+  const planBtn = (t, limit, days) => onTier(t) ? `🔄 Renew ${t} +${days}d` : `${t} · ${limit} acc`;
   const text =
     `💎 <b>Subscribe</b>\n\n` +
     `<b>Free trial</b> — <b>${c.freeLimit}</b> accounts for <b>${c.trialDays}</b> days. Full features to try.\n\n` +
@@ -184,9 +188,11 @@ export function subscribeScreen(user, c) {
     `✅ 📸 <b>Instagram</b> &amp; 🟣 <b>Truth Social</b>: full access on <b>every</b> plan — just enable (limits above are for X only).\n\n` +
     `<i>Need more? Add <b>+${c.packSize}</b> accounts (${c.packPriceStars}⭐) anytime, until your plan expires.</i>\n` +
     (crypto ? `<i>💡 Pay with crypto for a better price.</i>\n` : ``) +
+    ((onTier("Pro") || onTier("Whale"))
+      ? `<i>🔄 Buying your current plan again <b>extends it by days</b> — it does not add account slots. More slots = ➕ Pack.</i>\n` : ``) +
     `\nCurrent: <b>${esc(user?.tier || "Free")}</b> · Exp: <b>${fmtExp(user)}</b>`;
   const keyboard = new InlineKeyboard()
-    .text(`Pro · ${c.proLimit} acc`, "plan:pro").text(`Whale · ${c.whaleLimit} acc`, "plan:whale").row()
+    .text(planBtn("Pro", c.proLimit, c.proDays), "plan:pro").text(planBtn("Whale", c.whaleLimit, c.whaleDays), "plan:whale").row()
     .text(`➕ Pack +${c.packSize} acc`, "plan:pack").row()
     .text("⬅️ Back", "home").text("ⓧ Close", "close");
   return { text, keyboard };
