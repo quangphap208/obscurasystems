@@ -84,12 +84,15 @@ export async function applyPurchase(tgId, kind) {
   }
   const tier = kind === "whale" ? "Whale" : "Pro";
   const days = kind === "whale" ? cfg.whaleDays : cfg.proDays;
-  const limit = baseLimit(tier);
+  // GIA HẠN CÙNG TIER (còn hạn) -> GIỮ pack: UI bán pack ghi "valid until your current plan expires" —
+  // plan được gia hạn chứ không expire, reset là user mất tiền oan (bug 19/8: @DegenMuzan renew Pro
+  // mất pack +10 còn 2 tháng). Đổi tier (up/down) -> reset packs như cũ.
+  const keepPacks = isActive(u) && u.tier === tier ? (u.addon_packs || 0) : 0;
+  const limit = baseLimit(tier) + keepPacks * cfg.packSize;
   // GIA HẠN STACK: cộng dồn thời gian CÒN LẠI (gia hạn sớm không mất ngày). Mua mới/hết hạn = từ NGÀY MUA.
   const from = u.expires_at && u.expires_at > now() ? u.expires_at : now();
   const expiresAt = from + days * 86400000;
-  // reset packs (one-time đến hết hạn tier).
-  await col("users").updateOne({ _id: tgId }, { $set: { tier, account_limit: limit, expires_at: expiresAt, addon_packs: 0, expired_notified: false } });
+  await col("users").updateOne({ _id: tgId }, { $set: { tier, account_limit: limit, expires_at: expiresAt, addon_packs: keepPacks, expired_notified: false } });
   await col("watches").updateMany({ tg_id: tgId, paused: true }, { $set: { paused: false } });   // gia hạn/nâng cấp -> BỎ pause
   return { kind, tier, account_limit: limit, expires_at: expiresAt, days };
 }
