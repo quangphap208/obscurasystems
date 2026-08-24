@@ -113,14 +113,24 @@ export class TrackerSync {
 
         // 4a) SELF-HEAL: handle mình watch nhưng KHÔNG visible trên Bloom (track fail âm thầm / Bloom
         //     drop / sót từ account cũ) -> track lại trên shard đã gán (hoặc shard sống đầu tiên).
-        const missing = [...desired].filter((h) => !visibleAll.has(h));
+        // FIX 24/8: fetchState FAIL ≠ state RỖNG. 20/8 fetch failed -> visibleAll rỗng -> tưởng mất
+        // 102/102 -> báo 🚨 STATE-RESET GIẢ + re-track thừa toàn bộ. Handle thuộc shard fetch-fail
+        // thì KHÔNG kết luận được -> bỏ qua vòng này (vòng sau fetch ok sẽ đối chiếu thật).
+        const okShards = new Set(states.keys());
+        if (!okShards.size) { console.warn("[tracker-sync] fetchState fail toàn bộ shard — bỏ qua self-heal/exclusive vòng này"); return; }
+        const assignFor = new Map((await repo.allTracked()).map((t) => [t.handle, t.bloom_account_id]));
+        const missing = [...desired].filter((h) => {
+          const sid = assignFor.get(h);
+          if (sid != null && !okShards.has(sid)) return false;   // shard của nó không có state -> không phán
+          return !visibleAll.has(h);
+        });
         if (missing.length) {
           // >20 handle biến mất MỘT LƯỢT = chữ ký Bloom STATE-RESET (maintenance phía Bloom, thấy 16/8:
           // mất cả 93 handle + default list hồi sinh). Báo TO ngay (TG force + Slack) — khe hở vài phút
           // này có thể miss tweet (case @ohmyjack 15/8) — thay vì nằm im trong log thường.
           if (missing.length > 20)
             this.alert(`🚨 nghi Bloom STATE-RESET: ${missing.length}/${desired.size} handle biến mất khỏi state một lượt — đang tự track lại. Khe hở này có thể miss tweet.`, true, true);
-          const assign = new Map((await repo.allTracked()).map((t) => [t.handle, t.bloom_account_id]));
+          const assign = assignFor;
           const byShard = new Map();
           for (const h of missing) {
             let sid = assign.get(h);
