@@ -13,6 +13,9 @@ export class TrackerSync {
     this.pool = pool; this.tg = tg; this.adminIds = adminIds;
     this.keys = new Map();          // session -> {key, ts}
     this.busy = false; this.lastAlert = 0; this.lastSlack = 0;
+    // handle self-heal track-fail (vd account SUSPENDED -> Bloom 500) — backoff luỹ tiến 5'->6h,
+    // không dội API mỗi 20s (25/8: @marscoin_bnb suspended -> 10k request 500/ngày).
+    this.healBackoff = new Map();   // handle -> { fails, until }
   }
 
   async keyFor(session) {
@@ -122,6 +125,7 @@ export class TrackerSync {
         const missing = [...desired].filter((h) => {
           const sid = assignFor.get(h);
           if (sid != null && !okShards.has(sid)) return false;   // shard của nó không có state -> không phán
+          if ((this.healBackoff.get(h)?.until || 0) > Date.now()) return false;   // đang backoff track-fail
           return !visibleAll.has(h);
         });
         if (missing.length) {
@@ -142,9 +146,20 @@ export class TrackerSync {
             try {
               const key = await this.keyFor(a.session_token);
               for (let i = 0; i < hs.length; i += 100) await trackNames(a.session_token, key, hs.slice(i, i + 100));
+              for (const h of hs) this.healBackoff.delete(h);   // track ok -> xoá backoff
               console.log(`[tracker-sync] self-heal: track lại ${hs.length} handle thiếu trên shard ${sid}: ${hs.join(", ")}`);
               this.alert(`self-heal: track lại ${hs.length} account bị thiếu trên shard ${sid}.`);
-            } catch (e) { console.warn("[tracker-sync] self-heal lỗi:", e.message); }
+            } catch (e) {
+              // Batch fail (thường chỉ còn handle KHÔNG track được — suspended/đổi tên -> Bloom 500):
+              // backoff luỹ tiến 5'*2^n, trần 6h. Fail lần 4 -> báo admin 1 lần (kèm nghi vấn suspended).
+              for (const h of hs) {
+                const b = this.healBackoff.get(h) || { fails: 0 };
+                b.fails++; b.until = Date.now() + Math.min(6 * 3600000, 300000 * 2 ** (b.fails - 1));
+                this.healBackoff.set(h, b);
+                if (b.fails === 4) this.alert(`self-heal @${h} fail ${b.fails} lần liên tiếp — account suspended/đổi tên? Backoff tới 6h/lần, sẽ tự phục hồi nếu account sống lại.`, true);
+              }
+              console.warn(`[tracker-sync] self-heal lỗi (${hs.length} handle, backoff):`, e.message.slice(0, 140));
+            }
           }
         }
 
