@@ -107,7 +107,19 @@ bot.command("add", async (ctx) => {
   await repo.addWatch(ctx.from.id, r.found ? r.handle : handle, r.xid || null);
   track(ctx.from.id, "add", { handle: r.found ? r.handle : handle, result: "ok" });
   await ctx.reply(`✅ Added <b>@${esc(r.found ? r.handle : handle)}</b>. Notifications will arrive shortly.\nCustomize it: 👀 X accounts.`, HTML());
+  await dmWarn(ctx);
 });
+
+// User thao tác từ GROUP mà chưa từng Start DM -> Telegram chặn bot mở DM (403 "can't initiate
+// conversation") -> noti không bao giờ tới dù hệ gửi đều (case @Jillvalentine9 3/9: 130 tin bị chặn).
+// Cảnh báo ngay tại chỗ + nút mở DM. Chỉ nhắc ở group; DM thì hiển nhiên đã Start.
+async function dmWarn(ctx) {
+  if (!ctx.chat || ctx.chat.type === "private") return;
+  await ctx.reply(
+    `⚠️ <b>Important:</b> alerts are delivered by <b>DM</b>. Open a chat with me and press <b>Start</b> once — otherwise Telegram blocks all notifications.`,
+    HTML({ reply_markup: { inline_keyboard: [[{ text: "💬 Open DM & Start", url: `https://t.me/${BOT_USER}?start=dm` }]] } })
+  ).catch(() => {});
+}
 
 // ---------- /bulkadd /bulkremove — dán list từ tracker khác ----------
 // Token cách nhau bởi khoảng trắng / xuống dòng / phẩy; nhận @handle lẫn link x.com. Cap 100/lần.
@@ -162,6 +174,7 @@ bot.command("bulkadd", async (ctx) => {
   if (over) out += `\n✂️ List capped at ${BULK_CAP} — resend the remaining ${over}.`;
   if (added.length) out += `\n\nNotifications will start shortly. Customize: 👀 X accounts.`;
   await ctx.reply(out, HTML());
+  if (added.length) await dmWarn(ctx);
 });
 bot.command("bulkremove", async (ctx) => {
   const raw = (ctx.match || "").trim();
