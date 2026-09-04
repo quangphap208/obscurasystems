@@ -8,10 +8,29 @@ let database = null;
 
 export async function connect() {
   if (database) return database;
-  client = new MongoClient(cfg.mongoUri, { maxPoolSize: 10 });
-  await client.connect();
+  // Retry-backoff lúc boot (4/9: máy reboot, DNS chưa sẵn sàng -> connect throw FATAL -> pm2 cạn
+  // max_restarts -> app nằm `errored` 26 phút chờ restart tay). Kiên nhẫn chờ TRONG process:
+  // 3s -> gấp đôi -> trần 60s, tối đa 10 phút rồi mới chịu chết (không che lỗi cấu hình thật —
+  // sai URI/password thì vẫn thấy sau 10 phút, còn mạng chậm vài phút thì tự lành).
+  let delay = 3000;
+  const deadline = Date.now() + 10 * 60000;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      client = new MongoClient(cfg.mongoUri, { maxPoolSize: 10 });
+      await client.connect();
+      break;
+    } catch (e) {
+      await client?.close().catch(() => {});
+      client = null;
+      if (Date.now() + delay > deadline) throw e;
+      console.warn(`[mongo] connect lỗi (lần ${attempt}): ${e.message} — thử lại sau ${delay / 1000}s`);
+      await new Promise((r) => setTimeout(r, delay));
+      delay = Math.min(delay * 2, 60000);
+    }
+  }
   database = client.db(cfg.mongoDb);
-  await ensureIndexes(database);
+  // Index idempotent (prod đã có sẵn) — mạng chập chờn ngay sau connect không đáng để chết boot.
+  await ensureIndexes(database).catch((e) => console.warn("[mongo] ensureIndexes lỗi (bỏ qua):", e.message));
   return database;
 }
 
