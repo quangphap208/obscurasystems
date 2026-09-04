@@ -36,8 +36,10 @@ export function normalizeJ7(raw, kind) {
 // 17/8: lọt mẫu mới "Now tracking @x on Binance Square! Usage: ?/30" -> mở rộng cụm từ + thêm nhánh
 // author "bot" làm lưới cuối: prefix [error]/[success] + đúng tên bot hệ thống j7 = chặn cả mẫu câu
 // CHƯA GẶP. Tweet thật của account khác bắt đầu bằng "[success]" vẫn qua (trừ khi account tên "bot").
-const J7_SYS_MSG = (t, author) => /^\[(?:error|success)\]\s/.test(t) &&
-  (/watch list|plan usage|usage:\s|limit for this resource|now tracking|no longer tracking/i.test(t)
+// 4/9: lọt biến thể prefix "[warn] @x is already being watched!" -> nhận MỌI tag ngoặc vuông
+// ([error]/[success]/[warn]/[info]...), không liệt kê cứng nữa.
+const J7_SYS_MSG = (t, author) => /^\[\w{2,10}\]\s/.test(t) &&
+  (/watch list|plan usage|usage:\s|limit for this resource|now tracking|no longer tracking|already being watched/i.test(t)
     || (author || "").toLowerCase() === "bot");
 
 // tweet / retweet / quote / reply — shape j7 gần trùng canonical.
