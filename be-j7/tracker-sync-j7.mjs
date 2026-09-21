@@ -90,7 +90,10 @@ export class TrackerSyncJ7 {
       if (truth.length || ig.length) await repo.saveJ7Platforms({ truth, ig });
 
       const desired = new Set(await repo.distinctHandles());
-      const needAdd = [...desired].filter((h) => availSet.has(h));                        // pool, chưa stream
+      // Trừ ledger (21/9): availableAccounts là DANH MỤC toàn hệ, add xong vẫn nằm đó -> code cũ
+      // re-add cùng batch mỗi 5 phút vĩnh viễn (+add 9/18 lặp cả tháng). REST xác nhận add OK +
+      // ledger persist nên giờ tin được "đã add rồi thì thôi".
+      const needAdd = [...desired].filter((h) => availSet.has(h) && !this.added.has(h));
       // Dọn: handle trong ledger hết ai watch, TRỪ account thuộc main-feed curated của j7 (main do
       // ĐỘI J7 quản — 14/8 xác nhận: @baseapp trong main là HỌ add, không phải mình; đừng emit remove
       // vào đồ của họ). Ledger persist Mongo nên restart không còn làm orphan như trước.
