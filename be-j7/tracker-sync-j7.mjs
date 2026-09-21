@@ -107,7 +107,12 @@ export class TrackerSyncJ7 {
         try {
           await api("/api/accounts/available", this.feed.token, { method: "DELETE", body: { handles: needRemove } });
           for (const h of needRemove) this.added.delete(h);
-        } catch (e) { console.warn("[j7-sync] remove pool lỗi:", e.message); }
+        } catch (e) {
+          // 404 not_in_list: server vốn KHÔNG có handle này trong pool mình -> mục tiêu ("không còn
+          // trong pool") coi như đạt -> dọn ledger luôn, kẻo retry DELETE 404 mỗi 5 phút vô hạn.
+          if (/not_in_list|-> 404/.test(e.message)) for (const h of needRemove) this.added.delete(h);
+          else console.warn("[j7-sync] remove pool lỗi:", e.message);
+        }
       }
       if (needAdd.length || needRemove.length)
         await repo.saveJ7Added([...this.added]).catch((e) => console.warn("[j7-sync] save ledger:", e.message));
