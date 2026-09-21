@@ -80,7 +80,10 @@ export const cfg = {
   // (đang research). Bật REF_FWD_CTA=1 khi mở lại — không cần đổi code.
   refForwardCta: process.env.REF_FWD_CTA === "1",
   // --- BE j7 (nguồn thứ 2, chạy song song Bloom) — auth JWT socket, KHÁC Bloom hoàn toàn (xem be-j7/). ---
-  j7Host: process.env.J7_HOST || "https://nyc.j7tracker.io",   // host socket + /api/session-check
+  j7Host: process.env.J7_HOST || "https://nyc.j7tracker.io",   // host SOCKET feed (region)
+  // Host REST API (j7 migrate ~14/9/2026: watched-accounts + add/remove pool + session-check chuyển
+  // từ socket RPC/nyc sang HTTP trên core — RPC cũ chỉ còn trả "refresh_required").
+  j7CoreHost: process.env.J7_CORE_HOST || "https://core.j7tracker.io",
   j7Session: process.env.J7_SESSION_TOKEN || "",               // JWT gốc = localStorage.sessionId trên j7tracker.io
   j7KeepaliveHours: Number(process.env.J7_KEEPALIVE_HOURS || 6), // chu kỳ validate + rotate token
   // Monitor firehose (TEST/QC): copy MỌI event (cả 2 nguồn) + race-outcome vào 1 channel. Trống = TẮT

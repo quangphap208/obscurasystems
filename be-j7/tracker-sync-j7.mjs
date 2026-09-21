@@ -1,15 +1,37 @@
 // tracker-sync-j7.mjs (BE j7) — đồng bộ danh sách account j7 cần stream.
 // j7-list = main-feed (~1491, LUÔN auto stream) ∪ available pool (~6346, add FREE). Handle NGOÀI
 // list -> bỏ (Bloom lo, đúng routing dual-source). Cũng lưu j7_list vào Mongo cho gate isJ7Covered (M4).
-// Dùng CHUNG socket của J7Feed (get_all_watched_accounts + custom_accounts_*_available_batch).
+// 21/9: quản lý pool chuyển sang REST core host (socket chỉ còn dùng cho FEED — xem api() bên dưới).
 import * as repo from "../shared/repo.mjs";
 import { slackAlert } from "../shared/slack.mjs";
+import { cfg } from "../shared/config.mjs";
 
 // account từ j7 có thể là string hoặc object {handle|username} -> handle lowercase, bỏ @.
 const handles = (arr) => (arr || [])
   .map((a) => (typeof a === "string" ? a : (a && (a.handle || a.username)) || ""))
   .filter((h) => typeof h === "string" && h)
   .map((h) => h.replace(/^@/, "").toLowerCase());
+
+// REST API mới của j7 (migrate ~14/9/2026): web app bỏ socket RPC — get_all_watched_accounts chỉ còn
+// trả success:false "refresh_required" (bị reconcile cũ NUỐT IM LẶNG 7 ngày, phát hiện 21/9).
+// Thay bằng HTTP trên core host, auth x-session-id (reverse từ bundle main.af5ea965.js):
+//   GET  /api/watched-accounts            (shape y hệt response socket cũ: x/custom/truth/ig)
+//   POST /api/accounts/available {handles} = add pool · DELETE cùng endpoint = remove pool
+async function api(path, token, { method = "GET", body = null } = {}) {
+  const res = await fetch(`${cfg.j7CoreHost}${path}`, {
+    method,
+    headers: {
+      "x-session-id": token, Origin: "https://j7tracker.io", "User-Agent": "Mozilla/5.0",
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(30000),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || j.ok === false || j.success === false)
+    throw new Error(`${method} ${path} -> ${res.status}${j.code ? " " + j.code : ""}${j.error ? ": " + j.error : ""}`);
+  return j;
+}
 
 export class TrackerSyncJ7 {
   constructor({ feed, adminIds = [] }) {
@@ -34,14 +56,17 @@ export class TrackerSyncJ7 {
     // Nạp ledger persist (fix 14/8: RAM-only -> restart quên sạch -> orphan chiếm slot plan vĩnh viễn)
     try { for (const h of await repo.getJ7Added()) this.added.add(h); console.log(`[j7-sync] ledger: ${this.added.size} handle đã add trước đó`); }
     catch (e) { console.warn("[j7-sync] load ledger:", e.message); }
-    this.feed.on("all_watched_accounts_response", (r) =>
-      this.reconcile(r).catch((e) => { console.warn("[j7-sync]", e.message); this.slack(`reconcile lỗi: ${e.message}`); }));
     this.tick();
     this._t = setInterval(() => this.tick(), intervalMs);
     return this._t;
   }
 
-  tick() { this.feed.emit("get_all_watched_accounts", { sessionId: this.feed.token }); }
+  // REST thay socket RPC (21/9) — lỗi KHÔNG nuốt im lặng nữa: log + Slack (rate-limit 5" sẵn có).
+  tick() {
+    api("/api/watched-accounts", this.feed.token)
+      .then((r) => this.reconcile(r))
+      .catch((e) => { console.warn("[j7-sync] watched-accounts lỗi:", e.message); this.slack(`watched-accounts lỗi: ${e.message}`); });
+  }
 
   async reconcile(r) {
     if (!r || r.success === false) return;
@@ -71,13 +96,18 @@ export class TrackerSyncJ7 {
       // vào đồ của họ). Ledger persist Mongo nên restart không còn làm orphan như trước.
       const needRemove = [...this.added].filter((h) => !desired.has(h) && !mainSet.has(h));
 
+      // REST add/remove: khác emit cũ (fire-and-forget), giờ BIẾT kết quả — chỉ cập nhật ledger khi OK.
       if (needAdd.length) {
-        this.feed.emit("custom_accounts_add_available_batch", { sessionId: this.feed.token, accounts: needAdd });
-        for (const h of needAdd) this.added.add(h);
+        try {
+          await api("/api/accounts/available", this.feed.token, { method: "POST", body: { handles: needAdd } });
+          for (const h of needAdd) this.added.add(h);
+        } catch (e) { console.warn("[j7-sync] add pool lỗi:", e.message); this.slack(`add pool lỗi: ${e.message}`); }
       }
       if (needRemove.length) {
-        this.feed.emit("custom_accounts_remove_available_batch", { sessionId: this.feed.token, accounts: needRemove });
-        for (const h of needRemove) this.added.delete(h);
+        try {
+          await api("/api/accounts/available", this.feed.token, { method: "DELETE", body: { handles: needRemove } });
+          for (const h of needRemove) this.added.delete(h);
+        } catch (e) { console.warn("[j7-sync] remove pool lỗi:", e.message); }
       }
       if (needAdd.length || needRemove.length)
         await repo.saveJ7Added([...this.added]).catch((e) => console.warn("[j7-sync] save ledger:", e.message));

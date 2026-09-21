@@ -100,7 +100,7 @@ async function main() {
   if (cfg.j7KeepaliveHours > 0) {
     const tick = async () => {
       try {
-        const r = await sessionCheck(cfg.j7Host, token);
+        const r = await sessionCheck(cfg.j7CoreHost, token);   // 21/9: session-check dời từ nyc sang core
         if (r.rotated) { token = r.rotated; saveToken(TOKEN_FILE, token); feed.updateToken(token); console.log("🔄 j7 token rotated -> state/j7_token.txt"); }
         else if (!r.valid) await alertSession("session-check trả valid=false");
         else console.log(`[j7 keepalive] ok, token còn ${daysLeft(token).toFixed(1)}d`);
