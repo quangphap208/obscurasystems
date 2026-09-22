@@ -74,7 +74,8 @@ async function main() {
 
   console.log(`Engine chạy. Bỏ qua backlog ${cfg.warmupMs / 1000}s rồi bắt đầu gửi.`);
 
-  const shutdown = async () => { sync?.stop(); poller?.stop(); watchdog.stop(); clearInterval(statsTimer); await pool.stopAll(); await close().catch(() => {}); process.exit(0); };
+  // Van xả 3s: pool.stopAll (đóng Chromium) / close Mongo có thể treo khi mạng lởm -> tự thoát (22/9).
+  const shutdown = async () => { setTimeout(() => process.exit(0), 3000).unref(); sync?.stop(); poller?.stop(); watchdog.stop(); clearInterval(statsTimer); await pool.stopAll().catch(() => {}); await close().catch(() => {}); process.exit(0); };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 }

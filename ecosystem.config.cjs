@@ -12,6 +12,7 @@ module.exports = {
       max_restarts: 20,
       restart_delay: 3000,
       time: true,
+      kill_timeout: 5000,   // chờ shutdown graceful (van xả 3s trong app) trước khi SIGKILL — mặc định 1.6s quá gắt
       env: { NODE_ENV: "production" },
     },
     {
@@ -22,6 +23,7 @@ module.exports = {
       max_restarts: 20,
       restart_delay: 5000,
       time: true,
+      kill_timeout: 5000,   // chờ shutdown graceful (van xả 3s trong app) trước khi SIGKILL — mặc định 1.6s quá gắt
       env: { NODE_ENV: "production" },
     },
     {
@@ -34,6 +36,7 @@ module.exports = {
       max_restarts: 20,
       restart_delay: 5000,
       time: true,
+      kill_timeout: 5000,   // chờ shutdown graceful (van xả 3s trong app) trước khi SIGKILL — mặc định 1.6s quá gắt
       env: { NODE_ENV: "production" },
     },
     {
@@ -47,6 +50,7 @@ module.exports = {
       restart_delay: 3000,
       max_memory_restart: "200M",
       time: true,
+      kill_timeout: 5000,   // chờ shutdown graceful (van xả 3s trong app) trước khi SIGKILL — mặc định 1.6s quá gắt
       env: { NODE_ENV: "production" },
     },
   ],

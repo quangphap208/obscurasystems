@@ -583,8 +583,17 @@ function startExpirySweep() {
   setInterval(run, cfg.expirySweepMin * 60000);
 }
 
-process.once("SIGINT", async () => { await bot.stop(); await close(); process.exit(0); });
-process.once("SIGTERM", async () => { await bot.stop(); await close(); process.exit(0); });
+// Shutdown + VAN XẢ 3s: bot.stop()/close() treo (mạng lởm) -> pm2 chờ 1.6s rồi SIGKILL GIỮA long-poll
+// -> Telegram giữ connection cũ ~50s -> FE mới dính 409 ngầm, bot im ~1 phút = "restart bị đứng" (22/9).
+// Tự thoát sau 3s dù dở dang (long-polling không có cleanup bắt buộc); kill_timeout ecosystem = 5s.
+const bye = async () => {
+  setTimeout(() => process.exit(0), 3000).unref();
+  try { await bot.stop(); } catch {}
+  try { await close(); } catch {}
+  process.exit(0);
+};
+process.once("SIGINT", bye);
+process.once("SIGTERM", bye);
 startExpirySweep();       // expiry-downgrade: hạ gói hết hạn + pause watch vượt Free
 startCryptoPoller(bot);   // Phase 2: dò thanh toán crypto (no-op nếu chưa cấu hình ví/RPC)
 await bot.start({ onStart: () => console.log("polling…") });

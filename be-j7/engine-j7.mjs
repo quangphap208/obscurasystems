@@ -109,7 +109,8 @@ async function main() {
     keepaliveTimer = setInterval(tick, cfg.j7KeepaliveHours * 3600000);
   }
 
-  const shutdown = async () => { sync?.stop(); watchdog.stop(); buf.stop(); clearInterval(keepaliveTimer); feed.stop(); await close().catch(() => {}); process.exit(0); };
+  // Van xả 3s: close Mongo có thể treo khi mạng lởm -> tự thoát thay vì đợi pm2 SIGKILL (22/9).
+  const shutdown = async () => { setTimeout(() => process.exit(0), 3000).unref(); sync?.stop(); watchdog.stop(); buf.stop(); clearInterval(keepaliveTimer); feed.stop(); await close().catch(() => {}); process.exit(0); };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 }
