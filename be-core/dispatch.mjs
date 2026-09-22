@@ -95,6 +95,17 @@ export function makeDispatcher({ tg, getBotUser, warmupUntil = 0 }) {
       }
       if (Date.now() < warmupUntil) return;            // nuốt backlog lúc mới connect
 
+      // Follow/unfollow: chỉ bắn khi CHUYỂN TRẠNG THÁI thật. Nguồn re-emit follow cũ mỗi lần
+      // re-baseline (sau self-heal/STATE-RESET Bloom — xảy ra thường xuyên), mà deliveries TTL
+      // 2 ngày không chặn được lặp thưa vài ngày/lần (report 22/9: elonmusk followed dwr lặp).
+      // Đặt SAU warmup gate: event bị warmup nuốt không được ghi state (kẻo mất tin thật).
+      if ((e.kind === "followed" || e.kind === "unfollowed") && e.target) {
+        if (!(await repo.followTransition(handle, e.target, e.kind))) {
+          console.log(`[dispatch] bỏ follow lặp: ${e.kind} @${handle} → @${e.target}`);
+          return;
+        }
+      }
+
       // platform (Truth/IG): colKey = platform (settings.truth/ig), watcher lọc theo platform-watch.
       const isPlat = e.kind === "platform";
       const colKey = isPlat ? e.platform : KIND_TO_COL[e.kind];

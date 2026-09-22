@@ -109,6 +109,18 @@ export async function recordPayment({ tgId, method, kind, amount, currency, usd 
   } catch (e) { console.warn("[payments]", e.message); }   // audit không được làm hỏng flow credit
 }
 
+// follow_state: trạng thái follow CUỐI đã bắn cho cặp actor:target — vĩnh viễn, không TTL.
+// Nguồn (Bloom re-baseline sau re-track/STATE-RESET, j7) thỉnh thoảng RE-EMIT follow cũ như event
+// mới; deliveries TTL 2 ngày không đỡ được kiểu lặp thưa (report 22/9: "elonmusk followed dwr"
+// lặp dù follow từ đời nào). Trả true = chuyển trạng thái THẬT (nên gửi); false = duplicate.
+export async function followTransition(actor, target, state) {
+  const id = `${String(actor).toLowerCase()}:${String(target).toLowerCase()}`;
+  const prev = await col("follow_state").findOne({ _id: id });
+  if (prev?.state === state) return false;
+  await col("follow_state").updateOne({ _id: id }, { $set: { state, at: now() } }, { upsert: true });
+  return true;
+}
+
 // delivery_stats: rollup /ngày số DM noti đã gửi. Dispatcher đếm in-memory, flush $inc mỗi 60s
 // (_id = "YYYY-MM-DD", inc = {n, kind.<kind>, src.<source>}). Mất tối đa 60s data khi restart — chấp nhận.
 export async function bumpDeliveryStats(date, inc) {
