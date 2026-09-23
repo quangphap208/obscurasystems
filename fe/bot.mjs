@@ -35,7 +35,9 @@ process.on("unhandledRejection", (e) => { console.error("FATAL unhandled:", e); 
 assertFE();
 await connect();
 
-const bot = new Bot(cfg.botToken);
+console.log("FE boot: mongo OK");   // heartbeat boot (23/9: zombie kẹt trước dòng log đầu — giờ thấy được kẹt ở đâu)
+// timeoutSeconds 30: grammy mặc định 500s — getMe treo (IPv6 blackhole) là boot đứng 8 phút không dấu vết.
+const bot = new Bot(cfg.botToken, { client: { timeoutSeconds: 30 } });
 let BOT_USER = null;
 
 // Analytics (shared/track.mjs): bump last_active_at cho MỌI tương tác; event có nghĩa thì handler tự track().
@@ -541,6 +543,7 @@ async function toggle(ctx, s, scope) {
 // ---------- boot ----------
 bot.catch((err) => console.error("[bot error]", err.error?.message || err.message));
 
+console.log("FE boot: getMe…");
 const me = await bot.api.getMe();
 BOT_USER = me.username;
 // Menu chung (mọi user). subscribe ẩn khi SUBS_ENABLED != 1 (giai đoạn test).

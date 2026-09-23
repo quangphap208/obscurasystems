@@ -1,5 +1,11 @@
 // config.mjs — nạp .env (không cần dependency) + expose cấu hình dùng chung FE/BE.
 import { readFileSync } from "node:fs";
+import dns from "node:dns";
+
+// 23/9: node fetch kẹt đường IPv6 blackhole trên mạng Mac mini lởm (SYN không hồi đáp -> treo tới
+// timeout của caller; getMe grammy mặc định 500s -> FE "zombie boot"). curl sống vì happy-eyeballs
+// fallback IPv4 nhanh. Ép IPv4-first cho MỌI app (import config là ăn) — cũng giảm [tg] fetch failed.
+dns.setDefaultResultOrder("ipv4first");
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
