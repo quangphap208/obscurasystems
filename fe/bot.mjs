@@ -27,6 +27,11 @@ async function showPlatform(ctx, platform, edit = false) {
   await show(ctx, platformScreen(platform, enabled, globalList, followed), edit);
 }
 
+// Chốt chặn ZOMBIE (23/9): FE viết dạng top-level ESM, connect() throw sau deadline từng để process
+// treo "online" mà không boot — bot câm, pm2 không restart vì không exit. Mọi rejection không ai bắt
+// -> exit 1 để pm2 xoay vòng (mỗi lần boot lại có sẵn retry-backoff 10 phút của connect()).
+process.on("unhandledRejection", (e) => { console.error("FATAL unhandled:", e); process.exit(1); });
+
 assertFE();
 await connect();
 
