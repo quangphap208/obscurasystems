@@ -21,6 +21,9 @@ const J7_TOKEN_FILE = join(ROOT_DIR, "be-j7", "state", "j7_token.txt");
 const mask = (t) => (t ? `${t.slice(0, 6)}…${t.slice(-4)}` : null);
 
 const __dir = dirname(fileURLToPath(import.meta.url));
+// Chốt chặn ZOMBIE (24/9, cùng bệnh FE 23/9): boot đúng lúc mạng đứt -> connect() hết deadline throw
+// ở top-level ESM nhưng process treo "online" 18h không mở port. Rejection không ai bắt -> exit cho pm2 xoay.
+process.on("unhandledRejection", (e) => { console.error("FATAL unhandled:", e); process.exit(1); });
 if (!cfg.dashPassword) { console.error("Thiếu DASH_PASSWORD trong .env — dashboard không chạy."); process.exit(1); }
 await connect();
 
